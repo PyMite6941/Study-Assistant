@@ -5,6 +5,8 @@ from PIL import Image
 import pytesseract
 import numpy as np
 
+st.title("Add content")
+
 source_choice = st.radio("Source:" ["File Upload","Camera Snapshot"])
 if source_choice == "File Upload":
     file = st.file_uploader("Upload files to process [Image, MD, or PDF]",type=['png','jpg','md','pdf'])
