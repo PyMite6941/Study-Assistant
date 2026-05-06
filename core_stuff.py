@@ -9,7 +9,7 @@ import ollama
 import uuid
 
 
-class OllamaEmbedding:
+class OllamaEmbedding(chromadb.EmbeddingFunction):
     def __init__(self,model_name='nomic-embed-text'):
         self.model_name = model_name
 
@@ -24,9 +24,9 @@ class StudyAssistant:
     def __init__(self,chroma_path="./local_db"):
         self.asking_model = 'llama3.1'
         self.processing_model = 'nomic-embed-text'
-        self.chroma_client = chromadb.PersistentClient(name="study_stuff",settings=Settings(persist_directory=chroma_path,anonymized_telemetry=False,allow_reset=True))
+        self.chroma_client = chromadb.PersistentClient(settings=Settings(persist_directory=chroma_path,anonymized_telemetry=False,allow_reset=True))
         ollamaEmbedding = OllamaEmbedding(model_name=self.processing_model)
-        self.collection = self.chroma_client.get_or_create_collection(embedding_function=ollamaEmbedding)
+        self.collection = self.chroma_client.get_or_create_collection(name="study_stuff",embedding_function=ollamaEmbedding)
 
     def add_data(self,data):
         self.collection.add(ids=[str(uuid.uuid4())],documents=[data])
@@ -41,16 +41,16 @@ class StudyAssistant:
 
     def quiz_stuff(self,topic):
         results = self.collection.query(query_texts=[topic],n_results=1)
-        if not results['documents'][0]:
+        if not results.get('documents') or len(results['documents']) == 0 or not results['documents'][0]:
             return "No relevant content about this topic was found"
         relevant_context = results['documents'][0][0]
         prompt = f"You are an AI assistant that will never hallucinate answers. Use the context to answer the question being asked.\nContext: {relevant_context}\nCreate a multiple choice question using A-D and at the very end write 'ANSWER: X' where X is the right letter in the multiple choice that you create."
-        response = ollama.chat(model=self.asking_model,messages=[{'role':'user','prompt':prompt}])
+        response = ollama.chat(model=self.asking_model,messages=[{'role':'user','content':prompt}])
         match = re.search(r"ANSWER:\s([A-D])",response['message']['content'],re.IGNORECASE)
         if not match:
             return
         correct_answer = match.group(1).upper()
-        question_text = re.sub(r"ANSWER:\s([A-D])", "", response, flags=re.IGNORECASE).strip()
+        question_text = re.sub(r"ANSWER:\s([A-D])", "", response['message']['content'], flags=re.IGNORECASE).strip()
         return {
             'question': question_text,
             'answer': correct_answer

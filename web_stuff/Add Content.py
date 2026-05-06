@@ -7,11 +7,11 @@ import numpy as np
 
 st.title("Add content")
 
-source_choice = st.radio("Source:" ["File Upload","Camera Snapshot"])
+source_choice = st.radio("Source:",["File Upload","Camera Snapshot"])
 if source_choice == "File Upload":
     file = st.file_uploader("Upload files to process [Image, MD, or PDF]",type=['png','jpg','md','pdf'])
 elif source_choice == "Camera Snapshot":
-    file = st.camera_input("Upload an image from the Camera",type=['png','jpg'])
+    file = st.camera_input("Upload an image from the Camera")
 
 if file:
     with st.status("Processing ...",expanded=True) as status:
@@ -19,7 +19,7 @@ if file:
         raw_text = pytesseract.image_to_string(img)
         chunks = [c.strip() for c in raw_text.split("\n\n") if len(c.strip())> 20]
         if st.button("Commit to memory"):
-            ids = [f"id_{id}" for _ in range(len(chunks))]
+            ids = [f"id_{i}" for i in range(len(chunks))]
             st.session_state.collection.add(
                 documents=chunks,
                 ids=ids,
