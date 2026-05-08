@@ -1,5 +1,19 @@
 # Module to create a streamlit UI
 import streamlit as st
+# Modules for using the Study Assistant
+import os
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from core_stuff import StudyAssistant
+
+if "initialized" not in st.session_state:
+    st.session_state.studyai = StudyAssistant()
+    st.session_state.collection = st.session_state.studyai.collection
+    st.session_state.messages = []
+    st.session_state.processed_files = []
+    st.session_state.current_quiz = None
+    st.session_state.user_submitted = False
+    st.session_state.initialized = True
 
 st.title("Chat with your notes")
 
@@ -14,12 +28,15 @@ for message in st.session_state.messages:
                 for source in message['sources']:
                     st.info(source)
 
-prompt = st.chat_input("What would you like to know?")
+prompt = st.chat_input("What can I do to help?")
 if prompt:
     st.chat_message("user").markdown(prompt)
     st.session_state.messages.append({'role':'user','content':prompt})
     with st.chat_message("assistant"):
         with st.spinner("Searching for results ..."):
-            results = st.session_state.collection.query(query_texts=[prompt],n_results=5)
-            context_chunks = results['documents'][0]
-            source_metadata = results['metadatas'][0]
+            msg_type,data = st.session_state.studyai.designate_function(prompt)
+            if msg_type == 'chat':
+                st.markdown(data)
+            elif msg_type == 'flashcards':
+                st.write("Some flashcards on the topic:")
+                st.table(data)

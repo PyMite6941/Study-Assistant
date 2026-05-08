@@ -4,6 +4,20 @@ import streamlit as st
 from PIL import Image
 import pytesseract
 import numpy as np
+# Modules for using the Study Assistant
+import os
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from core_stuff import StudyAssistant
+
+if "initialized" not in st.session_state:
+    st.session_state.studyai = StudyAssistant()
+    st.session_state.collection = st.session_state.studyai.collection
+    st.session_state.messages = []
+    st.session_state.processed_files = []
+    st.session_state.current_quiz = None
+    st.session_state.user_submitted = False
+    st.session_state.initialized = True
 
 st.title("Add content")
 

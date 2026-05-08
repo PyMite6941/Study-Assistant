@@ -1,24 +1,24 @@
-# Modules for properly importing stuff
+# Module for properly importing stuff
+import streamlit as st
+# Modules for using the Study Assistant
 import os
 import sys
-# Module to create a streamlit UI
-import streamlit as st
-
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from core_stuff import StudyAssistant
 
 if "initialized" not in st.session_state:
     st.session_state.studyai = StudyAssistant()
-    st.session_state.collection = []
+    st.session_state.collection = st.session_state.studyai.collection
     st.session_state.messages = []
     st.session_state.processed_files = []
+    st.session_state.current_quiz = None
+    st.session_state.user_submitted = False
     st.session_state.initialized = True
 
-home_page = st.Page("Home.py",title="Home",default=True)
 upload_page = st.Page("Add Content.py", title="Add Content")
 chat_page = st.Page("Chat.py", title="Chat")
-quiz_page = st.Page("Quiz.py",title="Quiz")
-description_page = st.Page("Description.py", title="Description")
+description_page = st.Page("Description.py", title="Description",default=True)
 st.sidebar.text("Hack America 2026")
-pg = st.navigation([home_page,upload_page, chat_page, quiz_page, description_page])
+pg = st.navigation([upload_page, chat_page, description_page])
 st.sidebar.divider()
+pg.run()
