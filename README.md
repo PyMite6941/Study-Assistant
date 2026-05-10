@@ -20,7 +20,7 @@ A challenge for me is always staying motivated in a project. Sticking to this ta
 
 ## Accomplishments that I proud of
 
-I am not normally proud of myself for much, though it is an achievement that I have stuck to a project for longer than a week. If you go to my website [here](pymite6941.is-a.dev), you can see majority of my projects don't get continued as long due to me losing interest or motivation. I am also proud of me learning new tools, ChromaDB and Ollama, since that would be the necessary foundation for improving my most famous tool [the finance kit](https://github.com/pymite6941/expense-tracker).
+I am not normally proud of myself for much, though it is an achievement that I have stuck to a project for longer than a week. If you go to my website [here](https://pymite6941.is-a.dev), you can see majority of my projects don't get continued as long due to me losing interest or motivation. I am also proud of me learning new tools, ChromaDB and Ollama, since that would be the necessary foundation for improving my most famous tool [the finance kit](https://github.com/pymite6941/expense-tracker).
 
 ## What I learned
 

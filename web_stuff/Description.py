@@ -15,6 +15,10 @@ if "initialized" not in st.session_state:
     st.session_state.user_submitted = False
     st.session_state.initialized = True
 
+if st.sidebar.button("Hard Reset AI"):
+    st.session_state.clear()
+    st.rerun()
+
 st.title("Description")
 
 st.markdown("## Inspiration")
@@ -26,7 +30,7 @@ st.write("I used Python as the framework, utilizing both the CLI aspect and the 
 st.markdown("## Challenges I ran into")
 st.write("A challenge for me is always staying motivated in a project. Sticking to this task is definitely the first challenge I ran into but also the thought of using AI to create everything was so tempting! Instead I ended up using the AI to debug my code and also teach me how best to use ChromaDB and how it works.")
 st.markdown("## Accomplishments that I proud of")
-st.write("I am not normally proud of myself for much, though it is an achievement that I have stuck to a project for longer than a week. If you go to my website [here](pymite6941.is-a.dev), you can see majority of my projects don't get continued as long due to me losing interest or motivation. I am also proud of me learning new tools, ChromaDB and Ollama, since that would be the necessary foundation for improving my most famous tool [the finance kit](https://github.com/pymite6941/expense-tracker).")
+st.write("I am not normally proud of myself for much, though it is an achievement that I have stuck to a project for longer than a week. If you go to my website [here](https://pymite6941.is-a.dev), you can see majority of my projects don't get continued as long due to me losing interest or motivation. I am also proud of me learning new tools, ChromaDB and Ollama, since that would be the necessary foundation for improving my most famous tool [the finance kit](https://github.com/pymite6941/expense-tracker).")
 st.markdown("## What I learned")
 st.write("I learned how to use ChromaDB, a great platform that stores inputted data in a vector database that is then accessed to get a query. I also learned how to query a Ollama local model in this.")
 st.markdown("## What's next for Study Assistant")
