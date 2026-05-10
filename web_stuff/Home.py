@@ -19,6 +19,10 @@ upload_page = st.Page("Add Content.py", title="Add Content")
 chat_page = st.Page("Chat.py", title="Chat")
 description_page = st.Page("Description.py", title="Description",default=True)
 st.sidebar.text("Hack America 2026")
+with st.sidebar:
+    if st.button("Reset Session State",help="Wipes AI temporary memory and reinitalizes in case of a bug"):
+        st.session_state.clear()
+        st.rerun()
 pg = st.navigation([upload_page, chat_page, description_page])
 st.sidebar.divider()
 pg.run()
