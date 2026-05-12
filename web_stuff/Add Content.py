@@ -4,6 +4,7 @@ import streamlit as st
 from PIL import Image
 import pytesseract
 import numpy as np
+import uuid
 # Modules for using the Study Assistant
 import os
 import sys
@@ -19,10 +20,6 @@ if "initialized" not in st.session_state:
     st.session_state.user_submitted = False
     st.session_state.initialized = True
 
-if st.sidebar.button("Hard Reset AI"):
-    st.session_state.clear()
-    st.rerun()
-
 st.title("Add content")
 
 source_choice = st.radio("Source:",["File Upload","Camera Snapshot"])
@@ -37,7 +34,7 @@ if file:
         raw_text = pytesseract.image_to_string(img)
         chunks = [c.strip() for c in raw_text.split("\n\n") if len(c.strip())> 20]
         if st.button("Commit to memory"):
-            ids = [f"id_{i}" for i in range(len(chunks))]
+            ids = [str(uuid.uuid4()) for _ in chunks]
             st.session_state.collection.add(
                 documents=chunks,
                 ids=ids,

@@ -15,10 +15,6 @@ if "initialized" not in st.session_state:
     st.session_state.user_submitted = False
     st.session_state.initialized = True
 
-if st.sidebar.button("Hard Reset AI"):
-    st.session_state.clear()
-    st.rerun()
-
 st.title("Description")
 
 st.markdown("## Inspiration")

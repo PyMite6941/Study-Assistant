@@ -15,10 +15,6 @@ if "initialized" not in st.session_state:
     st.session_state.user_submitted = False
     st.session_state.initialized = True
 
-if st.sidebar.button("Hard Reset AI"):
-    st.session_state.clear()
-    st.rerun()
-
 st.title("Chat with your notes")
 
 if "messages" not in st.session_state:
@@ -39,8 +35,10 @@ if prompt:
     with st.chat_message("assistant"):
         with st.spinner("Searching for results ..."):
             msg_type,data = st.session_state.studyai.designate_function(prompt)
-            if msg_type == 'chat':
-                st.markdown(data)
+            if msg_type == 'quiz':
+                st.write("Time for a challenge!")
+                st.table(data)
             elif msg_type == 'flashcards':
                 st.write("Some flashcards on the topic:")
                 st.table(data)
+            st.session_state.messages.append({'role':'assistant','content':data})
