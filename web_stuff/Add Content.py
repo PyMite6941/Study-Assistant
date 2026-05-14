@@ -3,7 +3,8 @@ import streamlit as st
 # Modules to process files
 from PIL import Image
 import pytesseract
-import numpy as np
+import pypdf
+import io
 import uuid
 # Modules for using the Study Assistant
 import os
@@ -30,15 +31,26 @@ elif source_choice == "Camera Snapshot":
 
 if file:
     with st.status("Processing ...",expanded=True) as status:
-        img = Image.open(file)
-        raw_text = pytesseract.image_to_string(img)
-        chunks = [c.strip() for c in raw_text.split("\n\n") if len(c.strip())> 20]
-        if st.button("Commit to memory"):
+        name = getattr(file, "name", "snapshot.png")
+        ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+        if ext in ("png", "jpg", "jpeg") or source_choice == "Camera Snapshot":
+            img = Image.open(file)
+            raw_text = pytesseract.image_to_string(img)
+        elif ext == "pdf":
+            reader = pypdf.PdfReader(io.BytesIO(file.read()))
+            raw_text = " ".join(p.extract_text() for p in reader.pages if p.extract_text())
+        elif ext == "md":
+            raw_text = file.read().decode("utf-8")
+        else:
+            st.error(f"Unsupported file type: {ext}")
+            raw_text = ""
+        chunks = [c.strip() for c in raw_text.split("\n\n") if len(c.strip()) > 20]
+        if chunks and st.button("Commit to memory"):
             ids = [str(uuid.uuid4()) for _ in chunks]
             st.session_state.collection.add(
                 documents=chunks,
                 ids=ids,
-                metadatas=[{"source":file.name}]*len(chunks)
+                metadatas=[{"source": name}] * len(chunks)
             )
-            status.update(label="Memory saved!",status="complete")
-            st.success(f"Added {len(chunks)} to the Study Assistant.")
+            status.update(label="Memory saved!", status="complete")
+            st.success(f"Added {len(chunks)} chunks to the Study Assistant.")

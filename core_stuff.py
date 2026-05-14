@@ -8,7 +8,7 @@ import re
 # Module to create and store flashcard data
 import json
 # Modules for processing data
-from PIL import pillow
+from PIL import Image
 import pypdf
 import pytesseract
 # Modules for making everything work
@@ -23,21 +23,24 @@ class OllamaEmbedding(chromadb.EmbeddingFunction):
 
     def __call__(self,input:chromadb.Documents) -> chromadb.Embeddings:
         try:
-            embeddings = []
-            for text in input:
-                response = ollama.embeddings(model=self.model_name,prompt=text)
-                embeddings.append(response['embedding'])
-            return embeddings
-        except Exception as e:
+            return self._embed(input)
+        except Exception:
             self.start_ollama()
-            time.sleep(5)
-            embeddings = []
-            for text in input:
-                response = ollama.embeddings(model=self.model_name, prompt=text)
-                embeddings.append(response['embedding'])
-            return embeddings
-            
+            return self._embed(input)
+
+    def _embed(self,input:chromadb.Documents) -> chromadb.Embeddings:
+        embeddings = []
+        for text in input:
+            response = ollama.embeddings(model=self.model_name,prompt=text)
+            embeddings.append(response['embedding'])
+        return embeddings
+
     def start_ollama(self):
+        try:
+            ollama.list()
+            return
+        except Exception:
+            pass
         os_type = platform.system()
         try:
             if os_type == "Windows":
@@ -47,7 +50,14 @@ class OllamaEmbedding(chromadb.EmbeddingFunction):
             else:
                 subprocess.Popen(["ollama", "serve"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         except FileNotFoundError:
-            return "Ollama isn't installed. Download it at https://ollama.com/"
+            raise RuntimeError("Ollama isn't installed. Download it at https://ollama.com/")
+        for _ in range(15):
+            try:
+                ollama.list()
+                return
+            except Exception:
+                time.sleep(1)
+        raise RuntimeError("Ollama failed to start within 15 seconds.")
 
 class StudyAssistant:
     def __init__(self,chroma_path:str="./chroma"):
@@ -59,15 +69,16 @@ class StudyAssistant:
 
     def add_data(self,data):
         for file in data:
-            root,extension = os.path.splitext(file)
+            _,extension = os.path.splitext(file)
+            extension = extension.lower()
             if extension == ".md":
                 with open(file, "r") as f:
                     content = f.read()
             elif extension == ".pdf":
                 with open(file, "rb") as f:
-                    content = pypdf.PdfReader(f).pages[0].extract_text()
+                    content = " ".join(p.extract_text() for p in pypdf.PdfReader(f).pages if p.extract_text())
             elif extension in [".png",".jpg",".jpeg"]:
-                img = pillow.Image.open(file)
+                img = Image.open(file)
                 content = pytesseract.image_to_string(img)
             else:
                 continue
@@ -83,12 +94,12 @@ class StudyAssistant:
         response = ollama.chat(model=self.asking_model,messages=[{'role':'user','content':prompt}])
         return response['message']['content']
 
-    def quiz_stuff(self,topic:str):
+    def quiz_stuff(self,topic:str,previous_questions:list=None,comments:str=None):
         results = self.collection.query(query_texts=[topic],n_results=1)
         if not results.get('documents') or len(results['documents']) == 0 or not results['documents'][0]:
             return "No relevant content about this topic was found"
         relevant_context = results['documents'][0][0]
-        prompt = f"You are an AI assistant that will never hallucinate answers. Use the context to answer the question being asked.\nContext: {relevant_context}\nCreate a multiple choice question using A-D and at the very end write 'ANSWER: X' where X is the right letter in the multiple choice that you create. Make sure to mention what source you got the information from in the question so that the user can find it in their notes. The question should be about {topic}."
+        prompt = f"You are an AI assistant that will never hallucinate answers. Use the context to answer the question being asked.\nContext: {relevant_context}\nCreate a multiple choice question using A-D and at the very end write 'ANSWER: X' where X is the right letter in the multiple choice that you create. Make sure to mention what source you got the information from in the question so that the user can find it in their notes. The question should be about {topic}. These are the previous asked questions for this topic: {previous_questions}. Do not repeat any of those questions. If you cannot create a new question, say so explicitly and do not write 'ANSWER: X'. Here are the comments of the previous question so use these to make a better question: {comments}."
         response = ollama.chat(model=self.asking_model,messages=[{'role':'user','content':prompt}])
         match = re.search(r"ANSWER:\s([A-D])",response['message']['content'],re.IGNORECASE)
         if not match:
