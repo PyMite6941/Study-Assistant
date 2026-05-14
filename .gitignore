@@ -1,5 +1,7 @@
 _*
 .venv
+__pycache__/
 chroma/
-*.md
+errors.log
 submission for the project/
+submission for the project.zip

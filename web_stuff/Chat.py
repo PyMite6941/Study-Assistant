@@ -37,7 +37,9 @@ if prompt:
     st.chat_message("user").markdown(prompt)
     st.session_state.messages.append({'role':'user','content':prompt})
     with st.status("Searching for results ...",expanded=False) as status:
+        st.write("Calling the Study Assistant ...")
         msg_type,data = st.session_state.studyai.designate_function(prompt)
+        st.write("Processing the response ...")
         status.update(label="Done!",state="complete")
     with st.chat_message("assistant"):    
         if msg_type == 'quiz':
@@ -48,4 +50,8 @@ if prompt:
             st.table(data)
         else:
             st.markdown(data)
+    with st.dropdown("View sources"):
+        if isinstance(data, dict) and "sources" in data:
+            for source in data['sources']:
+                st.info(source)
     st.session_state.messages.append({'role':'assistant','content':data})

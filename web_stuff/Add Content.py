@@ -52,5 +52,5 @@ if file:
                 ids=ids,
                 metadatas=[{"source": name}] * len(chunks)
             )
-            status.update(label="Memory saved!", status="complete")
+            status.update(label="Memory saved!",state="complete")
             st.success(f"Added {len(chunks)} chunks to the Study Assistant.")
