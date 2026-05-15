@@ -41,17 +41,17 @@ if prompt:
         msg_type,data = st.session_state.studyai.designate_function(prompt)
         st.write("Processing the response ...")
         status.update(label="Done!",state="complete")
-    with st.chat_message("assistant"):    
+    with st.chat_message("assistant"):
         if msg_type == 'quiz':
             st.write("Time for a challenge!")
-            st.table(data)
+            st.markdown(data['question'])
         elif msg_type == 'flashcards':
             st.write("Some flashcards on the topic:")
             st.table(data)
         else:
-            st.markdown(data)
-    with st.dropdown("View sources"):
-        if isinstance(data, dict) and "sources" in data:
-            for source in data['sources']:
-                st.info(source)
-    st.session_state.messages.append({'role':'assistant','content':data})
+            parts = data.split('|', 1)
+            st.markdown(parts[0].strip())
+            if len(parts) > 1:
+                with st.expander("View sources"):
+                    st.write(parts[1].strip())
+    st.session_state.messages.append({'role':'assistant','content':data if isinstance(data,str) else str(data)})

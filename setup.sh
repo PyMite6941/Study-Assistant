@@ -1,10 +1,3 @@
-where ollama >null 2>&1
-if %ERRORLEVEL% NEQ 0 (
-    echo "Ollama is not installed. Please install Ollama and try again."
-    exit /b 1
-)
-ollama pull llama3.1
-ollama pull nomic-embed-text
 python -m venv .venv
 OS=$(uname -s)
 if [ "$OS" = "Linux" ] || [ "$OS" = "Darwin" ]; then
@@ -16,3 +9,10 @@ else
     exit 1
 fi
 pip install -r requirements.txt
+where ollama >null 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo "Ollama is not installed. Please install Ollama and try again."
+    exit /b 1
+)
+ollama pull llama3.1
+ollama pull nomic-embed-text

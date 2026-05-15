@@ -99,7 +99,9 @@ class StudyAssistant:
         if not results.get('documents') or len(results['documents']) == 0 or not results['documents'][0]:
             return "No relevant content about this topic was found"
         relevant_context = results['documents'][0][0]
-        prompt = f"You are an AI assistant that will never hallucinate answers. Use the context to answer the question being asked.\nContext: {relevant_context}\nCreate a multiple choice question using A-D and at the very end write 'ANSWER: X' where X is the right letter in the multiple choice that you create. Make sure to mention what source you got the information from in the question so that the user can find it in their notes. The question should be about {topic}. These are the previous asked questions for this topic: {previous_questions}. Do not repeat any of those questions. If you cannot create a new question, say so explicitly and do not write 'ANSWER: X'. Here are the comments of the previous question so use these to make a better question: {comments}."
+        prev_q_text = f"Do not repeat any of these previous questions: {previous_questions}." if previous_questions else ""
+        comments_text = f"Additional guidance: {comments}" if comments else ""
+        prompt = f"You are an AI assistant that will never hallucinate answers. Use the context to answer the question being asked.\nContext: {relevant_context}\nCreate a multiple choice question using A-D and at the very end write 'ANSWER: X' where X is the right letter in the multiple choice that you create. The question should be about {topic}. {prev_q_text} {comments_text} If you cannot create a new question, say so explicitly and do not write 'ANSWER: X'."
         response = ollama.chat(model=self.asking_model,messages=[{'role':'user','content':prompt}])
         match = re.search(r"ANSWER:\s([A-D])",response['message']['content'],re.IGNORECASE)
         if not match:
