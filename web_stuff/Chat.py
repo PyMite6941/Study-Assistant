@@ -38,7 +38,7 @@ if prompt:
     st.session_state.messages.append({'role':'user','content':prompt})
     with st.status("Searching for results ...",expanded=False) as status:
         st.write("Calling the Study Assistant ...")
-        msg_type,data = st.session_state.studyai.designate_function(prompt)
+        msg_type, data, sources = st.session_state.studyai.designate_function(prompt)
         st.write("Processing the response ...")
         status.update(label="Done!",state="complete")
     with st.chat_message("assistant"):
@@ -48,10 +48,13 @@ if prompt:
         elif msg_type == 'flashcards':
             st.write("Some flashcards on the topic:")
             st.table(data)
+            if st.button("Save to study later"):
+                st.session_state.studyai.save_flashcards(data)
+                st.success("Saved flashcards to review later")
         else:
-            parts = data.split('|', 1)
-            st.markdown(parts[0].strip())
-            if len(parts) > 1:
+            st.markdown(data)
+            if sources:
                 with st.expander("View sources"):
-                    st.write(parts[1].strip())
+                    for s in sources:
+                        st.info(s)
     st.session_state.messages.append({'role':'assistant','content':data if isinstance(data,str) else str(data)})

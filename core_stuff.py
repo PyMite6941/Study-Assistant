@@ -87,12 +87,19 @@ class StudyAssistant:
 
     def search_data(self,query:str,result_num:int=5):
         if self.collection.count() == 0:
-            return "No notes have been added yet. Use 'Add Content' to upload your notes first."
+            return "No notes have been added yet. Use 'Add Content' to upload your notes first.", []
         results = self.collection.query(query_texts=[query],n_results=result_num)
         context = " ".join(results['documents'][0])
-        prompt = f"You are a study assistant. Answer ONLY using the context provided — do not use any outside knowledge. If the context does not contain enough information to answer, say so explicitly. At the end of your answer, quote the exact passage(s) from the context that support your answer under a 'Sources:' heading.\nContext: {context}\nQuestion: {query}"
+        sources = list({m.get('source','Unknown') for m in results['metadatas'][0]})
+        prompt = (
+            f"You are a study assistant. You MUST answer using ONLY the context provided below. "
+            f"Do not use any knowledge from your training data. "
+            f"If the context does not contain enough information to answer the question, say exactly: 'I could not find this in your notes.' and nothing else. "
+            f"Do not make up, infer, or expand beyond what is explicitly stated in the context.\n\n"
+            f"Context: {context}\n\nQuestion: {query}"
+        )
         response = ollama.chat(model=self.asking_model,messages=[{'role':'user','content':prompt}])
-        return response['message']['content']
+        return response['message']['content'], sources
 
     def quiz_stuff(self,topic:str,previous_questions:list=None,comments:str=None):
         results = self.collection.query(query_texts=[topic],n_results=1)
@@ -112,6 +119,26 @@ class StudyAssistant:
             'question': question_text,
             'answer': correct_answer
         }
+
+    def save_quizzes(self,data:list):
+        if not data:
+            return "No data to process"
+        quizzes = self.load_quizzes()
+        quizzes.append(data)
+        not_duplicates = set()
+        for quiz in quizzes:
+            if not quiz in not_duplicates:
+                not_duplicates.add(quiz)
+        with open("saved_data/quizzes.json",'w') as file:
+            json.dump(not_duplicates)
+        return "Saved quizzes successfully"
+    
+    def load_quizzes(self):
+        if not os.path.exists("saved_data/quizzes.json"):
+            return []
+        with open("saved_data/quizzes.json",'r') as file:
+            content = file.read()
+            return json.loads(content) if content.strip() else []
 
     def create_flashcards(self,topic:str,card_number:int=15):
         results = self.collection.query(query_texts=[topic],n_results=card_number)
@@ -134,6 +161,26 @@ class StudyAssistant:
                     cards.append({'Question': q, 'Answer': a})
         return cards if cards else "Could not generate flashcards from the available content."
         
+    def save_flashcards(self,data:list):
+        if not data:
+            return "No data to process"
+        flashcards = self.load_flashcards()
+        flashcards.append(data)
+        not_duplicates = set()
+        for flashcard in flashcards:
+            if not flashcard in not_duplicates:
+                not_duplicates.add(flashcard)
+        with open("saved_data/flashcards.json",'w') as file:
+            json.dump(not_duplicates)
+        return "Saved flashcards successfully"
+    
+    def load_flashcards(self):
+        if not os.path.exists("saved_data/flashcards.json"):
+            return []
+        with open("saved_data/flashcards.json",'r') as file:
+            content = file.read()
+            return json.loads(content) if content.strip() else []
+
     def designate_function(self,raw_input:str):
         input = raw_input.lower().strip()
         commands = {
@@ -145,10 +192,11 @@ class StudyAssistant:
             if re.search(pattern,input):
                 topic = re.sub(pattern,"",input).strip()
                 if intent == "flashcards":
-                    return "flashcards",self.create_flashcards(topic)
+                    return "flashcards", self.create_flashcards(topic), []
                 elif intent == "quiz":
-                    return "quiz",self.quiz_stuff(topic)
-        return "chat",self.search_data(input)
+                    return "quiz", self.quiz_stuff(topic), []
+        response, sources = self.search_data(input)
+        return "chat", response, sources
 
     def install_stuff(self):
         try:
