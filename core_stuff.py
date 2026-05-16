@@ -29,11 +29,8 @@ class OllamaEmbedding(chromadb.EmbeddingFunction):
             return self._embed(input)
 
     def _embed(self,input:chromadb.Documents) -> chromadb.Embeddings:
-        embeddings = []
-        for text in input:
-            response = ollama.embeddings(model=self.model_name,prompt=text)
-            embeddings.append(response['embedding'])
-        return embeddings
+        response = ollama.embed(model=self.model_name,input=list(input))
+        return response['embeddings']
 
     def start_ollama(self):
         try:
@@ -82,7 +79,12 @@ class StudyAssistant:
                 content = pytesseract.image_to_string(img)
             else:
                 continue
-            self.collection.add(ids=[str(uuid.uuid4())],documents=[content])
+            source_name = os.path.basename(file)
+            chunks = [c.strip() for c in content.split("\n\n") if len(c.strip()) > 20]
+            if not chunks:
+                chunks = [content]
+            ids = [str(uuid.uuid4()) for _ in chunks]
+            self.collection.add(ids=ids,documents=chunks,metadatas=[{"source": source_name}] * len(chunks))
         return True
 
     def search_data(self,query:str,result_num:int=5):
@@ -102,10 +104,10 @@ class StudyAssistant:
         return response['message']['content'], sources
 
     def quiz_stuff(self,topic:str,previous_questions:list=None,comments:str=None):
-        results = self.collection.query(query_texts=[topic],n_results=1)
+        results = self.collection.query(query_texts=[topic],n_results=3)
         if not results.get('documents') or len(results['documents']) == 0 or not results['documents'][0]:
             return "No relevant content about this topic was found"
-        relevant_context = results['documents'][0][0]
+        relevant_context = " ".join(results['documents'][0])
         prev_q_text = f"Do not repeat any of these previous questions: {previous_questions}." if previous_questions else ""
         comments_text = f"Additional guidance: {comments}" if comments else ""
         prompt = f"You are an AI assistant that will never hallucinate answers. Use the context to answer the question being asked.\nContext: {relevant_context}\nCreate a multiple choice question using A-D and at the very end write 'ANSWER: X' where X is the right letter in the multiple choice that you create. The question should be about {topic}. {prev_q_text} {comments_text} If you cannot create a new question, say so explicitly and do not write 'ANSWER: X'."
@@ -120,17 +122,16 @@ class StudyAssistant:
             'answer': correct_answer
         }
 
-    def save_quizzes(self,data:list):
+    def save_quizzes(self,data:dict):
         if not data:
             return "No data to process"
         quizzes = self.load_quizzes()
-        quizzes.append(data)
-        not_duplicates = set()
-        for quiz in quizzes:
-            if not quiz in not_duplicates:
-                not_duplicates.add(quiz)
+        existing = {q.get('question') for q in quizzes}
+        if data.get('question') not in existing:
+            quizzes.append(data)
+        os.makedirs("saved_data",exist_ok=True)
         with open("saved_data/quizzes.json",'w') as file:
-            json.dump(not_duplicates)
+            json.dump(quizzes,file)
         return "Saved quizzes successfully"
     
     def load_quizzes(self):
@@ -165,13 +166,14 @@ class StudyAssistant:
         if not data:
             return "No data to process"
         flashcards = self.load_flashcards()
-        flashcards.append(data)
-        not_duplicates = set()
-        for flashcard in flashcards:
-            if not flashcard in not_duplicates:
-                not_duplicates.add(flashcard)
+        existing = {f.get('Question') for f in flashcards}
+        for card in data:
+            if card.get('Question') not in existing:
+                flashcards.append(card)
+                existing.add(card.get('Question'))
+        os.makedirs("saved_data",exist_ok=True)
         with open("saved_data/flashcards.json",'w') as file:
-            json.dump(not_duplicates)
+            json.dump(flashcards,file)
         return "Saved flashcards successfully"
     
     def load_flashcards(self):
@@ -182,20 +184,20 @@ class StudyAssistant:
             return json.loads(content) if content.strip() else []
 
     def designate_function(self,raw_input:str):
-        input = raw_input.lower().strip()
+        query = raw_input.lower().strip()
         commands = {
             r"(generate|make|create|compile)\s+flashcards": "flashcards",
             r"(generate|make|create|compile)\s+quiz": "quiz",
             r"quiz\s+me": "quiz",
         }
         for pattern,intent in commands.items():
-            if re.search(pattern,input):
-                topic = re.sub(pattern,"",input).strip()
+            if re.search(pattern,query):
+                topic = re.sub(pattern,"",query).strip()
                 if intent == "flashcards":
                     return "flashcards", self.create_flashcards(topic), []
                 elif intent == "quiz":
                     return "quiz", self.quiz_stuff(topic), []
-        response, sources = self.search_data(input)
+        response, sources = self.search_data(query)
         return "chat", response, sources
 
     def install_stuff(self):

@@ -34,15 +34,21 @@ class CLI:
             elif choice == "Quiz me on a topic":
                 previous_questions = []
                 topic = questionary.text("What topic should be quizzed?\n> ").ask()
-                results = self.studyai.quiz_stuff(topic)
-                answer = questionary.text(f"Question:\n{results['question']}\nWhat is the answer? (A, B, C, or D)\n> ").ask().strip().upper()
-                if results['answer'] == answer:
-                    console.print("[bold green]Correct![/]")
+                adaptive_comment = None
+                while True:
+                    results = self.studyai.quiz_stuff(topic,previous_questions=previous_questions,comments=adaptive_comment)
+                    if isinstance(results,str):
+                        console.print(f"[bold red]{results}[/]")
+                        break
+                    answer = questionary.text(f"Question:\n{results['question']}\nAnswer (A/B/C/D, or 'done' to stop)\n> ").ask().strip().upper()
+                    if answer == "DONE":
+                        break
                     previous_questions.append(results['question'])
-                    self.studyai.quiz_stuff(topic,previous_questions=previous_questions,comments=f"The user got {results['question']} right with answer {answer}. Make a new question that is slightly harder but still tests the same concept. The user should be able to get this new question right if they understand the concept well.")
-                else:
-                    console.print(f"[bold red]Incorrect![/]\nThe correct answer is {results['answer']}.\nReview the relevant content and try again.")
-                    previous_questions.append(results['question'])
-                    self.studyai.quiz_stuff(topic,previous_questions=previous_questions,comments=f"The user got {results['question']} wrong with answer {answer}. Make a new question that is similar but tests the same concept but is not identical to the previous question. The user should be able to get this new question right if they understand the concept better.")
+                    if results['answer'] == answer:
+                        console.print("[bold green]Correct![/]")
+                        adaptive_comment = f"The user got the last question right. Make the next question slightly harder but still on {topic}."
+                    else:
+                        console.print(f"[bold red]Incorrect![/] The correct answer was {results['answer']}.")
+                        adaptive_comment = f"The user got the last question wrong (chose {answer}, correct was {results['answer']}). Make a similar question on the same concept to reinforce it."
             elif choice == "Exit":
                 break

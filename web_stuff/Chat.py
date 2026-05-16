@@ -45,6 +45,9 @@ if prompt:
         if msg_type == 'quiz':
             st.write("Time for a challenge!")
             st.markdown(data['question'])
+            if st.button("Save to study later"):
+                st.session_state.studyai.save_quizzes(data)
+                st.success("Saved the question to review later")
         elif msg_type == 'flashcards':
             st.write("Some flashcards on the topic:")
             st.table(data)
