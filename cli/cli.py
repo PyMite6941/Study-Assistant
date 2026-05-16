@@ -30,7 +30,10 @@ class CLI:
                 self.studyai.add_data(file_names)
             elif choice == "Ask a question":
                 question = questionary.text("What are you wondering?\n> ").ask()
-                print(self.studyai.search_data(question))
+                gen, _ = self.studyai.search_data_stream(question)
+                for chunk in gen:
+                    print(chunk,end='',flush=True)
+                print()
             elif choice == "Quiz me on a topic":
                 previous_questions = []
                 topic = questionary.text("What topic should be quizzed?\n> ").ask()

@@ -87,21 +87,34 @@ class StudyAssistant:
             self.collection.add(ids=ids,documents=chunks,metadatas=[{"source": source_name}] * len(chunks))
         return True
 
-    def search_data(self,query:str,result_num:int=5):
-        if self.collection.count() == 0:
-            return "No notes have been added yet. Use 'Add Content' to upload your notes first.", []
+    def _retrieve(self,query:str,result_num:int=5):
         results = self.collection.query(query_texts=[query],n_results=result_num)
         context = " ".join(results['documents'][0])
         sources = list({m.get('source','Unknown') for m in results['metadatas'][0]})
-        prompt = (
+        return context, sources
+
+    def _search_prompt(self,context:str,query:str):
+        return (
             f"You are a study assistant. You MUST answer using ONLY the context provided below. "
             f"Do not use any knowledge from your training data. "
             f"If the context does not contain enough information to answer the question, say exactly: 'I could not find this in your notes.' and nothing else. "
             f"Do not make up, infer, or expand beyond what is explicitly stated in the context.\n\n"
             f"Context: {context}\n\nQuestion: {query}"
         )
-        response = ollama.chat(model=self.asking_model,messages=[{'role':'user','content':prompt}])
+
+    def search_data(self,query:str,result_num:int=5):
+        if self.collection.count() == 0:
+            return "No notes have been added yet. Use 'Add Content' to upload your notes first.", []
+        context, sources = self._retrieve(query,result_num)
+        response = ollama.chat(model=self.asking_model,messages=[{'role':'user','content':self._search_prompt(context,query)}])
         return response['message']['content'], sources
+
+    def search_data_stream(self,query:str,result_num:int=5):
+        if self.collection.count() == 0:
+            return (c for c in ["No notes have been added yet. Use 'Add Content' to upload your notes first."]), []
+        context, sources = self._retrieve(query,result_num)
+        stream = ollama.chat(model=self.asking_model,messages=[{'role':'user','content':self._search_prompt(context,query)}],stream=True)
+        return (chunk['message']['content'] or '' for chunk in stream), sources
 
     def quiz_stuff(self,topic:str,previous_questions:list=None,comments:str=None):
         results = self.collection.query(query_texts=[topic],n_results=3)
@@ -183,7 +196,7 @@ class StudyAssistant:
             content = file.read()
             return json.loads(content) if content.strip() else []
 
-    def designate_function(self,raw_input:str):
+    def designate_function(self,raw_input:str,stream:bool=True):
         query = raw_input.lower().strip()
         commands = {
             r"(generate|make|create|compile)\s+flashcards": "flashcards",
@@ -197,6 +210,9 @@ class StudyAssistant:
                     return "flashcards", self.create_flashcards(topic), []
                 elif intent == "quiz":
                     return "quiz", self.quiz_stuff(topic), []
+        if stream:
+            gen, sources = self.search_data_stream(query)
+            return "chat_stream", gen, sources
         response, sources = self.search_data(query)
         return "chat", response, sources
 

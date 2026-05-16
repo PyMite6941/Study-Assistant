@@ -36,11 +36,7 @@ prompt = st.chat_input("What can I do to help?")
 if prompt:
     st.chat_message("user").markdown(prompt)
     st.session_state.messages.append({'role':'user','content':prompt})
-    with st.status("Searching for results ...",expanded=False) as status:
-        st.write("Calling the Study Assistant ...")
-        msg_type, data, sources = st.session_state.studyai.designate_function(prompt)
-        st.write("Processing the response ...")
-        status.update(label="Done!",state="complete")
+    msg_type, data, sources = st.session_state.studyai.designate_function(prompt,stream=True)
     with st.chat_message("assistant"):
         if msg_type == 'quiz':
             st.write("Time for a challenge!")
@@ -48,16 +44,22 @@ if prompt:
             if st.button("Save to study later"):
                 st.session_state.studyai.save_quizzes(data)
                 st.success("Saved the question to review later")
+            saved_text = str(data)
         elif msg_type == 'flashcards':
             st.write("Some flashcards on the topic:")
             st.table(data)
             if st.button("Save to study later"):
                 st.session_state.studyai.save_flashcards(data)
                 st.success("Saved flashcards to review later")
+            saved_text = str(data)
         else:
-            st.markdown(data)
+            if msg_type == 'chat_stream':
+                saved_text = st.write_stream(data)
+            else:
+                st.markdown(data)
+                saved_text = data
             if sources:
                 with st.expander("View sources"):
                     for s in sources:
                         st.info(s)
-    st.session_state.messages.append({'role':'assistant','content':data if isinstance(data,str) else str(data)})
+    st.session_state.messages.append({'role':'assistant','content':saved_text})
