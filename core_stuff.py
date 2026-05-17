@@ -344,9 +344,5 @@ class StudyAssistant:
             json.dump(stats,f)
 
     def install_stuff(self):
-        try:
-            subprocess.run(['ollama','pull','llama3.1'])
-            subprocess.run(['ollama','pull','nomic-embed-text'])
-        except:
-            subprocess.run(['irm','https://ollama.com/install.ps1','|','iex'])
+        subprocess.run(['bash','setup.sh'])
         return True
