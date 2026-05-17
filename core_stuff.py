@@ -200,6 +200,7 @@ class StudyAssistant:
 
     def _clean_topic(self,raw:str) -> str:
         raw = re.sub(r'^(on|about|for|the|a|an|regarding|related to)\s+','',raw.strip(),flags=re.IGNORECASE)
+        raw = re.sub(r'\s+(please|now|for me|thanks)$', '', raw.strip(), flags=re.IGNORECASE)
         return raw.strip()
 
     def _extract_study_plan_params(self,query:str):
