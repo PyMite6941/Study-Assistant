@@ -22,7 +22,7 @@ class CLI:
             choice = questionary.select(
                 "",
                 choices=[
-                    "Add some notes via file upload",
+                    "Add content (files or text)",
                     "Ask a question",
                     "Quiz me on a topic",
                     "Create a study plan",
@@ -37,9 +37,42 @@ class CLI:
                 if not ready:
                     console.print(f"[bold red]Unavailable:[/] {msg}")
                     continue
-            if choice == "Add some notes via file upload":
-                file_names = questionary.text("What files should be uploaded? (Add a space between each file name)\n> ").ask().strip().split()
-                self.studyai.add_data(file_names)
+            if choice == "Add content (files or text)":
+                method = questionary.select(
+                    "How do you want to add content?",
+                    choices=["From files","Type or paste text","Back"],
+                    pointer='>'
+                ).ask()
+                if method == "From files":
+                    raw = questionary.text("File path(s) — separate multiple with spaces\n> ").ask().strip()
+                    if not raw:
+                        console.print("[yellow]No files entered.[/]")
+                    else:
+                        file_names = raw.split()
+                        results = self.studyai.add_data(file_names)
+                        for name, ok, msg in results:
+                            if ok:
+                                console.print(f"[bold green]✓[/] {name}: {msg}")
+                            else:
+                                console.print(f"[bold red]✗[/] {name}: {msg}")
+                elif method == "Type or paste text":
+                    label = questionary.text("Label for this content (e.g. 'Chapter 3 notes')\n> ").ask().strip() or "manual input"
+                    console.print("[dim]Type or paste your notes below. Enter a blank line then type END to finish.[/]")
+                    lines = []
+                    while True:
+                        try:
+                            line = input()
+                        except EOFError:
+                            break
+                        if line.strip().upper() == "END" and lines and lines[-1].strip() == "":
+                            break
+                        lines.append(line)
+                    text = "\n".join(lines).strip()
+                    if text:
+                        count = self.studyai.add_text(text, source_name=label)
+                        console.print(f"[bold green]Added {count} chunk(s) under '{label}'.[/]")
+                    else:
+                        console.print("[yellow]No text entered.[/]")
             elif choice == "Ask a question":
                 question = questionary.text("What are you wondering?\n> ").ask()
                 gen, _ = self.studyai.search_data_stream(question)
@@ -71,7 +104,7 @@ class CLI:
                 topic = questionary.text("What topic do you want to study?\n> ").ask()
                 date_str = questionary.text("Target date (e.g. June 10, in 5 days) — leave blank for 7 days\n> ").ask().strip()
                 if date_str:
-                    topic_parsed, days = self.studyai._extract_study_plan_params(f"study plan for {topic} by {date_str}")
+                    topic, days = self.studyai._extract_study_plan_params(f"study plan for {topic} by {date_str}")
                 else:
                     days = 7
                 console.print(f"Generating a {days}-day study plan for '{topic}' ...")

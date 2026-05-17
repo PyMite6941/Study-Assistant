@@ -38,8 +38,8 @@ with tab_saved:
         st.info("No saved plans yet. Create one above.")
     else:
         for i, plan in enumerate(plans):
-            with st.expander(f"{plan['topic']} — {plan['days']} days (created {plan.get('created','')})"):
-                for day_info in plan['plan']:
+            with st.expander(f"{plan.get('topic','Plan')} — {plan.get('days','?')} days (created {plan.get('created','')})"):
+                for day_info in plan.get('plan',[]):
                     st.markdown(f"**Day {day_info['day']}: {day_info.get('focus','')}**")
                     for task in day_info.get('tasks', []):
                         st.checkbox(task, key=f"saved_{i}_{day_info['day']}_{task}")

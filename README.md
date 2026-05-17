@@ -11,7 +11,7 @@ First give the program the permissions to be ran using this command:
 `chmod +x setup.sh`
 Run the shell script like this on Powershell after the above command is done:
 `bash setup.sh`
-Run the shell script like this on any other supported OS after the command is done:
+Run the shell script like this on MacOS or Linux after the command is done:
 `./setup.sh`
 
 However you can just get an API key from a provider like Groq or Anthropic if your device doesn't have a GPU and/or a good CPU, just run the CLI or the Web UI settings and select the proper API key to save.
@@ -28,6 +28,14 @@ Then it is time to activate the running script, run.py. Activate it by using the
 `python run.py`
 
 Toggle to the UI that you prefer, whether the CLI or the Web UI version it will communicate with the API if it has been added yet or Local LLM to produce the desired result.
+
+## Features of this project
+
+This project has many useful features that make this project truly stand out, however the pinacle aspect of this project is Streamlit due to the packages that Streamlit makes available for public use compared to the CLI, thus not all of the discussed features are able to be directly applied to the CLI.
+-The Chat Feature allows the processing LLM to use natural language to complete the user's task based on the content provided and stored in the ChromaDB. This feature processes the input to then output the various artifacts that are then saved and can be viewed later such as flashcards and quizzes.
+-The Add Content Feature is vital for success since without it the ChromaDB would never be updated. This important feature adds the ability to upload not just files but take a photo to be uploaded through the Steamlit package.
+-The Setup Shell Script [say that 10 times fast] quickly initalizes everything necessary for the project to run without the hastle of understanding every little bit, abstracting the semi-complex and super boring commands that need to be added. This makes it easy so that the user doesn't have to focus on the difficult aspects of installation themself.
+-The essential Config.toml file stores any API keys that are for the cloud-based AI engines securely and makes changing API keys very easy with the interfaces using the functions in `core_stuff.py`.
 
 ## Inspiration
 

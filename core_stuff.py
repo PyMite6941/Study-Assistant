@@ -18,6 +18,7 @@ import pytesseract
 import chromadb
 from chromadb.config import Settings
 import ollama
+import socket
 import uuid
 
 class OllamaEmbedding(chromadb.EmbeddingFunction):
@@ -60,16 +61,28 @@ class OllamaEmbedding(chromadb.EmbeddingFunction):
         raise RuntimeError("Ollama failed to start within 15 seconds.")
 
 GROQ_MODEL_MAP = {
-    "llama3.1":  "llama-3.1-70b-versatile",
-    "llama3.2":  "llama-3.2-90b-text-preview",
-    "mistral":   "mixtral-8x7b-32768",
-    "phi3:mini": "gemma2-9b-it",
+    "llama3.1":  "llama-3.1-8b-instant",
+    "llama3.2":  "llama-3.1-8b-instant",
+    "mistral":   "llama-3.1-8b-instant",
+    "phi3:mini": "llama-3.1-8b-instant",
 }
 OPENAI_MODEL_MAP = {
     "llama3.1":  "gpt-4o-mini",
     "llama3.2":  "gpt-4o-mini",
     "mistral":   "gpt-4o-mini",
     "phi3:mini": "gpt-4o-mini",
+}
+ANTHROPIC_MODEL_MAP = {
+    "llama3.1":  "claude-3-5-haiku-20241022",
+    "llama3.2":  "claude-3-5-haiku-20241022",
+    "mistral":   "claude-3-5-haiku-20241022",
+    "phi3:mini": "claude-3-5-haiku-20241022",
+}
+GEMINI_MODEL_MAP = {
+    "llama3.1":  "gemini-2.0-flash",
+    "llama3.2":  "gemini-2.0-flash",
+    "mistral":   "gemini-2.0-flash",
+    "phi3:mini": "gemini-2.0-flash",
 }
 
 class StudyAssistant:
@@ -84,98 +97,186 @@ class StudyAssistant:
         if self._provider != "ollama":
             return True, ""
         try:
-            models = ollama.list()
-            names = [m.get('model','') for m in models.get('models',[])]
+            result = ollama.list()
+            names = [m.model for m in result.models]
             if not any(self.asking_model in n for n in names):
                 return False, f"Ollama model '{self.asking_model}' is not pulled. Run: ollama pull {self.asking_model}"
             return True, ""
         except Exception:
             return False, "Ollama is not running and no API key is set. Start Ollama or add an API key in Settings."
 
+    def _has_internet(self):
+        try:
+            socket.create_connection(("8.8.8.8", 53), timeout=3)
+            return True
+        except Exception:
+            return False
+
     def _init_provider(self):
         config = self.load_config()
         keys = config.get("api_keys",{})
         models = config.get("models",{})
         base_model = models.get("chat_model","llama3.1")
+        configured_provider = models.get("provider","ollama")
+
+        CLOUD_PROVIDERS = [
+            ("groq",      keys.get("groq",""),      "https://api.groq.com/openai/v1",  GROQ_MODEL_MAP),
+            ("openai",    keys.get("openai",""),     "https://api.openai.com/v1",        OPENAI_MODEL_MAP),
+            ("anthropic", keys.get("anthropic",""),  "https://api.anthropic.com/v1",     ANTHROPIC_MODEL_MAP),
+            ("gemini",    keys.get("gemini",""),     "https://generativelanguage.googleapis.com/v1beta/openai", GEMINI_MODEL_MAP),
+        ]
+
         self._provider = "ollama"
         self._api_key = ""
         self._api_base = ""
-        if keys.get("groq"):
-            self._provider = "groq"
-            self._api_key = keys["groq"]
-            self._api_base = "https://api.groq.com/openai/v1"
-            self.asking_model = GROQ_MODEL_MAP.get(base_model, base_model)
-        elif keys.get("openai"):
-            self._provider = "openai"
-            self._api_key = keys["openai"]
-            self._api_base = "https://api.openai.com/v1"
-            self.asking_model = OPENAI_MODEL_MAP.get(base_model, base_model)
-        else:
-            self.asking_model = base_model
+        self.asking_model = base_model
+
+        online = self._has_internet()
+        if not online:
+            return
+
+        # Try configured provider first, then fall through the rest in order
+        ordered = sorted(CLOUD_PROVIDERS, key=lambda p: 0 if p[0] == configured_provider else 1)
+        for name, key, base, model_map in ordered:
+            if key:
+                self._provider = name
+                self._api_key = key
+                self._api_base = base
+                self.asking_model = model_map.get(base_model, base_model)
+                return
 
     def _llm_chat(self,messages:list,stream:bool=False):
+        import requests as req
+
         if self._provider == "ollama":
             if stream:
                 s = ollama.chat(model=self.asking_model,messages=messages,stream=True)
-                return (chunk['message']['content'] or '' for chunk in s)
+                return (chunk.message.content or '' for chunk in s)
             resp = ollama.chat(model=self.asking_model,messages=messages)
-            return resp['message']['content']
-        import httpx
-        headers = {"Authorization":f"Bearer {self._api_key}","Content-Type":"application/json"}
-        payload = {"model":self.asking_model,"messages":messages,"stream":stream}
-        if stream:
-            def _gen():
-                with httpx.stream("POST",f"{self._api_base}/chat/completions",
-                                  json=payload,headers=headers,timeout=60) as r:
-                    for line in r.iter_lines():
-                        line = line.strip()
-                        if line.startswith("data: ") and line != "data: [DONE]":
+            return resp.message.content
+
+        if self._provider == "anthropic":
+            headers = {
+                "x-api-key": self._api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            }
+            payload = {"model":self.asking_model,"max_tokens":2048,"messages":messages}
+            if stream:
+                payload["stream"] = True
+                def _anthropic_gen():
+                    r = req.post("https://api.anthropic.com/v1/messages",
+                                 json=payload,headers=headers,stream=True,timeout=60)
+                    r.raise_for_status()
+                    for raw in r.iter_lines():
+                        line = (raw.decode("utf-8") if isinstance(raw,bytes) else raw).strip()
+                        if line.startswith("data: "):
                             try:
-                                chunk = json.loads(line[6:])
-                                content = chunk["choices"][0]["delta"].get("content") or ""
-                                yield content
+                                evt = json.loads(line[6:])
+                                if evt.get("type") == "content_block_delta":
+                                    yield evt["delta"].get("text","")
                             except Exception:
                                 pass
+                return _anthropic_gen()
+            r = req.post("https://api.anthropic.com/v1/messages",
+                         json=payload,headers=headers,timeout=60)
+            r.raise_for_status()
+            body = r.json()
+            if "error" in body:
+                raise RuntimeError(f"Anthropic error: {body['error'].get('message', body['error'])}")
+            return body["content"][0]["text"]
+
+        # OpenAI-compatible providers (groq, openai, gemini)
+        headers = {"Authorization":f"Bearer {self._api_key}","Content-Type":"application/json"}
+        payload = {"model":self.asking_model,"messages":messages,"max_tokens":2048}
+        if stream:
+            payload["stream"] = True
+            def _gen():
+                r = req.post(f"{self._api_base}/chat/completions",
+                             json=payload,headers=headers,stream=True,timeout=60)
+                r.raise_for_status()
+                for raw in r.iter_lines():
+                    line = (raw.decode("utf-8") if isinstance(raw,bytes) else raw).strip()
+                    if line.startswith("data: ") and line != "data: [DONE]":
+                        try:
+                            chunk = json.loads(line[6:])
+                            content = chunk["choices"][0]["delta"].get("content") or ""
+                            if content:
+                                yield content
+                        except Exception:
+                            pass
             return _gen()
-        resp = httpx.post(f"{self._api_base}/chat/completions",
-                          json=payload,headers=headers,timeout=60)
-        return resp.json()["choices"][0]["message"]["content"]
+        r = req.post(f"{self._api_base}/chat/completions",
+                     json=payload,headers=headers,timeout=60)
+        if not r.ok:
+            try:
+                err = r.json().get("error",{})
+                msg = err.get("message", r.text)
+            except Exception:
+                msg = r.text
+            raise RuntimeError(f"API {r.status_code}: {msg}")
+        body = r.json()
+        if "error" in body:
+            raise RuntimeError(f"API error: {body['error'].get('message', body['error'])}")
+        return body["choices"][0]["message"]["content"]
 
     def add_data(self,data):
+        results = []
         for file in data:
+            if not os.path.exists(file):
+                results.append((file, False, f"File not found: {file}"))
+                continue
             _,extension = os.path.splitext(file)
             extension = extension.lower()
-            if extension == ".md":
-                with open(file, "r") as f:
-                    content = f.read()
-            elif extension == ".pdf":
-                with open(file, "rb") as f:
-                    content = " ".join(p.extract_text() for p in pypdf.PdfReader(f).pages if p.extract_text())
-            elif extension in [".png",".jpg",".jpeg"]:
-                img = Image.open(file)
-                content = pytesseract.image_to_string(img)
-            else:
-                continue
-            source_name = os.path.basename(file)
-            chunks = [c.strip() for c in content.split("\n\n") if len(c.strip()) > 20]
-            if not chunks:
-                chunks = [content]
-            ids = [str(uuid.uuid4()) for _ in chunks]
-            self.collection.add(ids=ids,documents=chunks,metadatas=[{"source": source_name}] * len(chunks))
-        return True
+            try:
+                if extension == ".md":
+                    with open(file, "r", encoding="utf-8") as f:
+                        content = f.read()
+                elif extension == ".pdf":
+                    with open(file, "rb") as f:
+                        content = " ".join(p.extract_text() for p in pypdf.PdfReader(f).pages if p.extract_text())
+                elif extension in [".png",".jpg",".jpeg"]:
+                    img = Image.open(file)
+                    content = pytesseract.image_to_string(img)
+                elif extension in [".txt",".rst",".tex"]:
+                    with open(file, "r", encoding="utf-8") as f:
+                        content = f.read()
+                else:
+                    results.append((file, False, f"Unsupported file type: {extension}"))
+                    continue
+                source_name = os.path.basename(file)
+                chunks = [c.strip() for c in content.split("\n\n") if len(c.strip()) > 20]
+                if not chunks:
+                    chunks = [content]
+                ids = [str(uuid.uuid4()) for _ in chunks]
+                self.collection.add(ids=ids,documents=chunks,metadatas=[{"source": source_name}] * len(chunks))
+                results.append((file, True, f"Added {len(chunks)} chunk(s)"))
+            except Exception as e:
+                results.append((file, False, str(e)))
+        return results
+
+    def add_text(self,text:str,source_name:str="manual input"):
+        if not text or not text.strip():
+            return 0
+        chunks = [c.strip() for c in text.split("\n\n") if len(c.strip()) > 20]
+        if not chunks:
+            chunks = [text.strip()]
+        ids = [str(uuid.uuid4()) for _ in chunks]
+        self.collection.add(ids=ids,documents=chunks,metadatas=[{"source": source_name}] * len(chunks))
+        return len(chunks)
 
     def _retrieve(self,query:str,result_num:int=5):
+        result_num = min(result_num, max(1, self.collection.count()))
         results = self.collection.query(query_texts=[query],n_results=result_num)
         context = " ".join(results['documents'][0])
         sources = list({m.get('source','Unknown') for m in results['metadatas'][0]})
         return context, sources
 
     def _search_prompt(self,context:str,query:str):
+        context = context[:6000] if len(context) > 6000 else context
         return (
-            f"You are a study assistant. You MUST answer using ONLY the context provided below. "
-            f"Do not use any knowledge from your training data. "
-            f"If the context does not contain enough information to answer the question, say exactly: 'I could not find this in your notes.' and nothing else. "
-            f"Do not make up, infer, or expand beyond what is explicitly stated in the context.\n\n"
+            f"You are a study assistant. Answer using ONLY the context below. "
+            f"If the context lacks enough info, say: 'I could not find this in your notes.'\n\n"
             f"Context: {context}\n\nQuestion: {query}"
         )
 
@@ -192,7 +293,7 @@ class StudyAssistant:
         return self._llm_chat([{'role':'user','content':self._search_prompt(context,query)}],stream=True), sources
 
     def quiz_stuff(self,topic:str,previous_questions:list=None,comments:str=None):
-        results = self.collection.query(query_texts=[topic],n_results=3)
+        results = self.collection.query(query_texts=[topic],n_results=min(3, max(1, self.collection.count())))
         if not results.get('documents') or len(results['documents']) == 0 or not results['documents'][0]:
             return "No relevant content about this topic was found"
         relevant_context = " ".join(results['documents'][0])
@@ -230,7 +331,7 @@ class StudyAssistant:
             return json.loads(content) if content.strip() else []
 
     def create_flashcards(self,topic:str,card_number:int=15):
-        results = self.collection.query(query_texts=[topic],n_results=card_number)
+        results = self.collection.query(query_texts=[topic],n_results=min(card_number, max(1, self.collection.count())))
         if not results.get('documents') or len(results['documents']) == 0 or not results['documents'][0]:
             return "No relevant content about this topic was found"
         context = " ".join(results['documents'][0])
@@ -367,6 +468,11 @@ class StudyAssistant:
             content = f.read()
             return json.loads(content) if content.strip() else []
 
+    def search_videos(self,query:str):
+        import urllib.parse
+        search_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote(query)}"
+        return [{"title": f"YouTube: {query}", "url": search_url}]
+
     def designate_function(self,raw_input:str,stream:bool=True):
         query = raw_input.lower().strip()
         commands = {
@@ -375,6 +481,7 @@ class StudyAssistant:
             r"quiz\s+me": "quiz",
             r"(create|make|generate|build)?\s*(a\s+)?study\s+plan": "study_plan",
             r"(create|make|generate|show|draw|build)?\s*(a\s+)?concept\s+(map|graph|diagram)": "concept_map",
+            r"(find|search\s(a\s+)?video)": "video",
         }
         for pattern,intent in commands.items():
             if re.search(pattern,query):
@@ -390,6 +497,9 @@ class StudyAssistant:
                 elif intent == "concept_map":
                     topic = self._clean_topic(re.sub(pattern,"",query).strip())
                     return "concept_map", self.create_concept_map(topic), []
+                elif intent == "video":
+                    topic = self._clean_topic(re.sub(pattern,"",query).strip())
+                    return "video", self.search_videos(topic), []
         if stream:
             gen, sources = self.search_data_stream(query)
             return "chat_stream", gen, sources

@@ -1,3 +1,20 @@
+touch config.toml
+cat << 'EOF' > config.toml
+[api_keys]
+groq = ""
+openai = ""
+gemini = ""
+anthropic = ""
+
+[models]
+provider = "ollama"
+chat_model = "llama3.1"
+embedding_model = "nomic-embed-text"
+
+[paths]
+chroma_path = "./chroma"
+saved_data_path = "./saved_data"
+EOF
 python -m venv .venv
 OS=$(uname -s)
 if [ "$OS" = "Linux" ] || [ "$OS" = "Darwin" ]; then

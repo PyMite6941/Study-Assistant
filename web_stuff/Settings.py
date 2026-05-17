@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 import sys
+import shutil
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from core_stuff import StudyAssistant
 
@@ -86,6 +87,21 @@ st.divider()
 
 # --- Session ---
 st.subheader("Session")
-if st.button("Reset Session State"):
-    st.session_state.clear()
-    st.rerun()
+
+col_a, col_b = st.columns(2)
+with col_a:
+    if st.button("Clear Cache"):
+        root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        deleted = 0
+        for dirpath, dirnames, _ in os.walk(root):
+            for d in dirnames:
+                if d == "__pycache__":
+                    shutil.rmtree(os.path.join(dirpath, d), ignore_errors=True)
+                    deleted += 1
+        st.session_state.clear()
+        st.success(f"Cleared {deleted} __pycache__ folder(s) and reset session state.")
+        st.rerun()
+with col_b:
+    if st.button("Reset Session State"):
+        st.session_state.clear()
+        st.rerun()
