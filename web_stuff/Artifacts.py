@@ -15,7 +15,7 @@ if "initialized" not in st.session_state:
 
 st.title("Artifacts")
 
-tab_flash, tab_quiz = st.tabs(["Flashcards", "Quizzes"])
+tab_flash, tab_quiz, tab_study_plans, tab_concept_maps = st.tabs(["Flashcards", "Quizzes", "Study Plans", "Concept Maps"])
 
 with tab_flash:
     flashcards = st.session_state.studyai.load_flashcards()
@@ -35,3 +35,24 @@ with tab_quiz:
             with st.expander(f"Question {i + 1}"):
                 st.markdown(q.get("question", ""))
                 st.markdown(f"**Answer:** {q.get('answer', '')}")
+
+with tab_study_plans:
+    plans = st.session_state.studyai.load_study_plans()
+    if not plans:
+        st.info("No saved study plans yet.")
+    else:
+        st.write(f"{len(plans)} study plan(s) saved.")
+        for i, p in enumerate(plans):
+            with st.expander(f"Study Plan {i + 1}"):
+                st.markdown(p.get("plan", ""))
+
+with tab_concept_maps:
+    maps = st.session_state.studyai.load_concept_maps()
+    if not maps:
+        st.info("No saved concept maps yet.")
+    else:
+        st.write(f"{len(maps)} concept map(s) saved.")
+        for i, m in enumerate(maps):
+            with st.expander(f"Concept Map {i + 1}"):
+                dot = m.get("dot", "")
+                st.graphviz_chart(dot)

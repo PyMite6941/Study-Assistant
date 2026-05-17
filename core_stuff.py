@@ -3,10 +3,12 @@ import os
 import platform
 import subprocess
 import time
+import datetime
 # Module to be able to test users properly
 import re
 # Module to create and store flashcard data
 import json
+from dateutil import parser as dateparser
 # Modules for processing data
 from PIL import Image
 import pypdf
@@ -196,25 +198,150 @@ class StudyAssistant:
             content = file.read()
             return json.loads(content) if content.strip() else []
 
+    def _clean_topic(self,raw:str) -> str:
+        raw = re.sub(r'^(on|about|for|the|a|an|regarding|related to)\s+','',raw.strip(),flags=re.IGNORECASE)
+        return raw.strip()
+
+    def _extract_study_plan_params(self,query:str):
+        days = 7
+        topic = query
+        m = re.search(r'in\s+(\d+)\s+(day|week)s?',query,re.IGNORECASE)
+        if m:
+            n = int(m.group(1))
+            days = n * 7 if 'week' in m.group(2).lower() else n
+            topic = (query[:m.start()] + query[m.end():]).strip()
+        else:
+            m = re.search(r'\b(by|before|until|on)\s+(.+?)$',query,re.IGNORECASE)
+            if m:
+                try:
+                    target = dateparser.parse(m.group(2),default=datetime.datetime.today()).date()
+                    days = max(1,(target - datetime.date.today()).days)
+                    topic = query[:m.start()].strip()
+                except Exception:
+                    pass
+        topic = re.sub(r'(create|make|generate|build|a\s+)?study\s+plan\s*(for|about|on|regarding)?','',topic,flags=re.IGNORECASE)
+        return self._clean_topic(topic) or query, days
+
+    def create_study_plan(self,topic:str,days:int=7):
+        n = min(5,self.collection.count())
+        context = ""
+        if n > 0:
+            results = self.collection.query(query_texts=[topic],n_results=n)
+            context = " ".join(results['documents'][0])
+        prompt = (
+            f"Create a {days}-day study plan for '{topic}' using the context below. "
+            f"Return ONLY a valid JSON array. Each item must have: {{\"day\": N, \"focus\": \"short focus area\", \"tasks\": [\"task1\", \"task2\"]}}. "
+            f"No text outside the JSON array.\n\nContext: {context if context else 'No notes available — use general knowledge.'}"
+        )
+        response = ollama.chat(model=self.asking_model,messages=[{'role':'user','content':prompt}])
+        raw = response['message']['content']
+        try:
+            plan = json.loads(raw)
+        except Exception:
+            match = re.search(r'\[.*\]',raw,re.DOTALL)
+            plan = json.loads(match.group()) if match else None
+        if not plan:
+            return None
+        return {"topic": topic, "days": days, "created": str(datetime.date.today()), "plan": plan}
+
+    def save_study_plan(self,plan:dict):
+        plans = self.load_study_plans()
+        plans.append(plan)
+        os.makedirs("saved_data",exist_ok=True)
+        with open("saved_data/study_plans.json","w") as f:
+            json.dump(plans,f)
+
+    def load_study_plans(self):
+        if not os.path.exists("saved_data/study_plans.json"):
+            return []
+        with open("saved_data/study_plans.json","r") as f:
+            content = f.read()
+            return json.loads(content) if content.strip() else []
+
+    def create_concept_map(self,topic:str):
+        n = min(5,self.collection.count())
+        if n == 0:
+            return None
+        results = self.collection.query(query_texts=[topic],n_results=n)
+        context = " ".join(results['documents'][0])
+        prompt = (
+            f"Extract key concepts and relationships about '{topic}' from the context below. "
+            f"Return ONLY a valid JSON array of triples: [[\"concept1\", \"relationship\", \"concept2\"], ...]. "
+            f"Maximum 12 triples. Keep concept names short (1-4 words). "
+            f"No text outside the JSON array.\n\nContext: {context}"
+        )
+        response = ollama.chat(model=self.asking_model,messages=[{'role':'user','content':prompt}])
+        raw = response['message']['content']
+        try:
+            return json.loads(raw)
+        except Exception:
+            match = re.search(r'\[.*\]',raw,re.DOTALL)
+            try:
+                return json.loads(match.group()) if match else None
+            except Exception:
+                return None
+
+    def save_concept_map(self,concept_map:dict):
+        maps = self.load_concept_maps()
+        maps.append(concept_map)
+        os.makedirs("saved_data",exist_ok=True)
+        with open("saved_data/concept_maps.json","w") as f:
+            json.dump(maps,f)
+
+    def load_concept_maps(self):
+        if not os.path.exists("saved_data/concept_maps.json"):
+            return []
+        with open("saved_data/concept_maps.json","r") as f:
+            content = f.read()
+            return json.loads(content) if content.strip() else []
+
     def designate_function(self,raw_input:str,stream:bool=True):
         query = raw_input.lower().strip()
         commands = {
             r"(generate|make|create|compile)\s+flashcards": "flashcards",
             r"(generate|make|create|compile)\s+quiz": "quiz",
             r"quiz\s+me": "quiz",
+            r"(create|make|generate|build)?\s*(a\s+)?study\s+plan": "study_plan",
+            r"(create|make|generate|show|draw|build)?\s*(a\s+)?concept\s+(map|graph|diagram)": "concept_map",
         }
         for pattern,intent in commands.items():
             if re.search(pattern,query):
-                topic = re.sub(pattern,"",query).strip()
                 if intent == "flashcards":
+                    topic = self._clean_topic(re.sub(pattern,"",query).strip())
                     return "flashcards", self.create_flashcards(topic), []
                 elif intent == "quiz":
+                    topic = self._clean_topic(re.sub(pattern,"",query).strip())
                     return "quiz", self.quiz_stuff(topic), []
+                elif intent == "study_plan":
+                    topic, days = self._extract_study_plan_params(query)
+                    return "study_plan", self.create_study_plan(topic,days), []
+                elif intent == "concept_map":
+                    topic = self._clean_topic(re.sub(pattern,"",query).strip())
+                    return "concept_map", self.create_concept_map(topic), []
         if stream:
             gen, sources = self.search_data_stream(query)
             return "chat_stream", gen, sources
         response, sources = self.search_data(query)
         return "chat", response, sources
+
+    def load_stats(self):
+        if not os.path.exists("saved_data/stats.json"):
+            return {"total_questions": 0, "correct": 0, "by_topic": {}}
+        with open("saved_data/stats.json","r") as f:
+            return json.load(f)
+
+    def save_stats(self,topic:str,correct:bool):
+        stats = self.load_stats()
+        stats["total_questions"] += 1
+        if correct:
+            stats["correct"] += 1
+        t = stats["by_topic"].setdefault(topic,{"correct": 0, "total": 0})
+        t["total"] += 1
+        if correct:
+            t["correct"] += 1
+        os.makedirs("saved_data",exist_ok=True)
+        with open("saved_data/stats.json","w") as f:
+            json.dump(stats,f)
 
     def install_stuff(self):
         try:
