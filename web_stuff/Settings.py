@@ -49,17 +49,38 @@ with col2:
 
 st.divider()
 
-# --- Model Settings ---
-st.subheader("Model Settings")
-chat_model = st.selectbox(
-    "Chat model",
-    ["llama3.1", "llama3.2", "phi3:mini", "mistral"],
-    index=["llama3.1", "llama3.2", "phi3:mini", "mistral"].index(st.session_state.studyai.asking_model)
-    if st.session_state.studyai.asking_model in ["llama3.1", "llama3.2", "phi3:mini", "mistral"] else 0
-)
-if st.button("Apply Model"):
+# --- Config / API Keys ---
+st.subheader("Configuration")
+config = st.session_state.studyai.load_config()
+
+with st.expander("API Keys", expanded=False):
+    st.caption("Leave blank to use Ollama locally.")
+    groq    = st.text_input("Groq API Key",    value=config["api_keys"].get("groq",""),    type="password")
+    openai  = st.text_input("OpenAI API Key",  value=config["api_keys"].get("openai",""),  type="password")
+    gemini  = st.text_input("Gemini API Key",  value=config["api_keys"].get("gemini",""),  type="password")
+    anthropic = st.text_input("Anthropic API Key", value=config["api_keys"].get("anthropic",""), type="password")
+
+with st.expander("Model Settings", expanded=False):
+    provider = st.selectbox("Provider", ["ollama","groq","openai","gemini","anthropic"],
+        index=["ollama","groq","openai","gemini","anthropic"].index(config["models"].get("provider","ollama")))
+    chat_model = st.text_input("Chat model", value=config["models"].get("chat_model","llama3.1"))
+    embedding_model = st.text_input("Embedding model", value=config["models"].get("embedding_model","nomic-embed-text"))
+
+current_provider = config["models"].get("provider","ollama")
+if provider != current_provider:
+    st.warning("Switching providers changes the embedding model. **Reset your Knowledge Base** after saving to avoid dimension mismatch errors.")
+
+if st.button("Save Configuration", type="primary"):
+    config["api_keys"]["groq"] = groq
+    config["api_keys"]["openai"] = openai
+    config["api_keys"]["gemini"] = gemini
+    config["api_keys"]["anthropic"] = anthropic
+    config["models"]["provider"] = provider
+    config["models"]["chat_model"] = chat_model
+    config["models"]["embedding_model"] = embedding_model
+    st.session_state.studyai.save_config(config)
     st.session_state.studyai.asking_model = chat_model
-    st.success(f"Chat model set to {chat_model}.")
+    st.success("Configuration saved.")
 
 st.divider()
 

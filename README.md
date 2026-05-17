@@ -1,6 +1,33 @@
 Hello! This is a project I made for myself and it also just so happened that I submitted it for the 2026 Hack America Hackathon.
 
-Please read the license before downloading.
+I put a lot of time into this project from making the installation of necessary packages super easy to even considering the small functionality details such as runtime on terrible laptops like mine. I even expanded to supporting cloud models such as Groq, ChatGPT, and Anthropic to name a few. Any support is much appreciated.
+
+Please read the license before downloading as it may change any intentions.
+
+## Setup
+
+If you want to use Ollama as the local model to incorporate AI security practices use the setup.sh which works on every major OS [Linux, MacOS, or Windows].
+First give the program the permissions to be ran using this command:
+`chmod +x setup.sh`
+Run the shell script like this on Powershell after the above command is done:
+`bash setup.sh`
+Run the shell script like this on any other supported OS after the command is done:
+`./setup.sh`
+
+However you can just get an API key from a provider like Groq or Anthropic if your device doesn't have a GPU and/or a good CPU, just run the CLI or the Web UI settings and select the proper API key to save.
+
+## Running the Program
+
+The setup shell script automatically creates a virtual environment called `.venv` so activate it through the proper commands.
+For Windows use the following command:
+`.venv/bin/Activate.ps1`
+For MacOS and Linux use the following command:
+`source .venv/bin/activate`
+
+Then it is time to activate the running script, run.py. Activate it by using the following command:
+`python run.py`
+
+Toggle to the UI that you prefer, whether the CLI or the Web UI version it will communicate with the API if it has been added yet or Local LLM to produce the desired result.
 
 ## Inspiration
 

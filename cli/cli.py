@@ -11,6 +11,8 @@ import questionary
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from core_stuff import StudyAssistant
 
+LLM_CHOICES = {"Ask a question","Quiz me on a topic","Create a study plan","Generate a concept map"}
+
 class CLI:
     def __init__(self):
         self.studyai = StudyAssistant()
@@ -25,10 +27,16 @@ class CLI:
                     "Quiz me on a topic",
                     "Create a study plan",
                     "Generate a concept map",
+                    "Settings",
                     "Exit",
                 ],
                 pointer='>'
             ).ask()
+            if choice in LLM_CHOICES:
+                ready, msg = self.studyai.check_chat_ready()
+                if not ready:
+                    console.print(f"[bold red]Unavailable:[/] {msg}")
+                    continue
             if choice == "Add some notes via file upload":
                 file_names = questionary.text("What files should be uploaded? (Add a space between each file name)\n> ").ask().strip().split()
                 self.studyai.add_data(file_names)
@@ -94,5 +102,28 @@ class CLI:
                     console.print(table)
                 else:
                     console.print("[bold red]Could not extract concepts. Add more notes on this topic first.[/]")
+            elif choice == "Settings":
+                config = self.studyai.load_config()
+                setting = questionary.select("What do you want to edit?", choices=[
+                    "API Keys","Model Settings","Back"
+                ]).ask()
+                if setting == "API Keys":
+                    for key in config["api_keys"]:
+                        current = config["api_keys"][key]
+                        display = f"{'*' * len(current) if current else '(empty)'}"
+                        new_val = questionary.text(f"{key} [{display}] (leave blank to keep):\n> ").ask().strip()
+                        if new_val:
+                            config["api_keys"][key] = new_val
+                    self.studyai.save_config(config)
+                    console.print("[bold green]API keys saved.[/]")
+                elif setting == "Model Settings":
+                    for key in config["models"]:
+                        current = config["models"][key]
+                        new_val = questionary.text(f"{key} [{current}] (leave blank to keep):\n> ").ask().strip()
+                        if new_val:
+                            config["models"][key] = new_val
+                    self.studyai.save_config(config)
+                    self.studyai.asking_model = config["models"]["chat_model"]
+                    console.print("[bold green]Model settings saved.[/]")
             elif choice == "Exit":
                 break

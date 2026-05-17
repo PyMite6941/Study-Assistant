@@ -14,5 +14,10 @@ if %ERRORLEVEL% NEQ 0 (
     echo "Ollama is not installed. Please install Ollama and try again."
     exit /b 1
 )
-ollama pull llama3.1
 ollama pull nomic-embed-text
+echo "Do you want to set up Ollama as your default provider? (y/n)"
+read answer
+if [ "$answer" = "y" ] || [ "$answer" = "Y" ]; then
+    ollama pull llama3.1
+fi
+exit /b 0

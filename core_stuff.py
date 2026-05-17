@@ -4,6 +4,7 @@ import platform
 import subprocess
 import time
 import datetime
+import tomllib
 # Module to be able to test users properly
 import re
 # Module to create and store flashcard data
@@ -58,13 +59,87 @@ class OllamaEmbedding(chromadb.EmbeddingFunction):
                 time.sleep(1)
         raise RuntimeError("Ollama failed to start within 15 seconds.")
 
+GROQ_MODEL_MAP = {
+    "llama3.1":  "llama-3.1-70b-versatile",
+    "llama3.2":  "llama-3.2-90b-text-preview",
+    "mistral":   "mixtral-8x7b-32768",
+    "phi3:mini": "gemma2-9b-it",
+}
+OPENAI_MODEL_MAP = {
+    "llama3.1":  "gpt-4o-mini",
+    "llama3.2":  "gpt-4o-mini",
+    "mistral":   "gpt-4o-mini",
+    "phi3:mini": "gpt-4o-mini",
+}
+
 class StudyAssistant:
     def __init__(self,chroma_path:str="./chroma"):
-        self.asking_model = 'llama3.1'
         self.processing_model = 'nomic-embed-text'
         self.chroma_client = chromadb.PersistentClient(settings=Settings(persist_directory=chroma_path,anonymized_telemetry=False,allow_reset=True))
-        ollamaEmbedding = OllamaEmbedding(model_name=self.processing_model)
-        self.collection = self.chroma_client.get_or_create_collection(name="study_stuff",embedding_function=ollamaEmbedding)
+        self._init_provider()
+        from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+        self.collection = self.chroma_client.get_or_create_collection(name="study_stuff",embedding_function=DefaultEmbeddingFunction())
+
+    def check_chat_ready(self) -> tuple:
+        if self._provider != "ollama":
+            return True, ""
+        try:
+            models = ollama.list()
+            names = [m.get('model','') for m in models.get('models',[])]
+            if not any(self.asking_model in n for n in names):
+                return False, f"Ollama model '{self.asking_model}' is not pulled. Run: ollama pull {self.asking_model}"
+            return True, ""
+        except Exception:
+            return False, "Ollama is not running and no API key is set. Start Ollama or add an API key in Settings."
+
+    def _init_provider(self):
+        config = self.load_config()
+        keys = config.get("api_keys",{})
+        models = config.get("models",{})
+        base_model = models.get("chat_model","llama3.1")
+        self._provider = "ollama"
+        self._api_key = ""
+        self._api_base = ""
+        if keys.get("groq"):
+            self._provider = "groq"
+            self._api_key = keys["groq"]
+            self._api_base = "https://api.groq.com/openai/v1"
+            self.asking_model = GROQ_MODEL_MAP.get(base_model, base_model)
+        elif keys.get("openai"):
+            self._provider = "openai"
+            self._api_key = keys["openai"]
+            self._api_base = "https://api.openai.com/v1"
+            self.asking_model = OPENAI_MODEL_MAP.get(base_model, base_model)
+        else:
+            self.asking_model = base_model
+
+    def _llm_chat(self,messages:list,stream:bool=False):
+        if self._provider == "ollama":
+            if stream:
+                s = ollama.chat(model=self.asking_model,messages=messages,stream=True)
+                return (chunk['message']['content'] or '' for chunk in s)
+            resp = ollama.chat(model=self.asking_model,messages=messages)
+            return resp['message']['content']
+        import httpx
+        headers = {"Authorization":f"Bearer {self._api_key}","Content-Type":"application/json"}
+        payload = {"model":self.asking_model,"messages":messages,"stream":stream}
+        if stream:
+            def _gen():
+                with httpx.stream("POST",f"{self._api_base}/chat/completions",
+                                  json=payload,headers=headers,timeout=60) as r:
+                    for line in r.iter_lines():
+                        line = line.strip()
+                        if line.startswith("data: ") and line != "data: [DONE]":
+                            try:
+                                chunk = json.loads(line[6:])
+                                content = chunk["choices"][0]["delta"].get("content") or ""
+                                yield content
+                            except Exception:
+                                pass
+            return _gen()
+        resp = httpx.post(f"{self._api_base}/chat/completions",
+                          json=payload,headers=headers,timeout=60)
+        return resp.json()["choices"][0]["message"]["content"]
 
     def add_data(self,data):
         for file in data:
@@ -108,15 +183,13 @@ class StudyAssistant:
         if self.collection.count() == 0:
             return "No notes have been added yet. Use 'Add Content' to upload your notes first.", []
         context, sources = self._retrieve(query,result_num)
-        response = ollama.chat(model=self.asking_model,messages=[{'role':'user','content':self._search_prompt(context,query)}])
-        return response['message']['content'], sources
+        return self._llm_chat([{'role':'user','content':self._search_prompt(context,query)}]), sources
 
     def search_data_stream(self,query:str,result_num:int=5):
         if self.collection.count() == 0:
             return (c for c in ["No notes have been added yet. Use 'Add Content' to upload your notes first."]), []
         context, sources = self._retrieve(query,result_num)
-        stream = ollama.chat(model=self.asking_model,messages=[{'role':'user','content':self._search_prompt(context,query)}],stream=True)
-        return (chunk['message']['content'] or '' for chunk in stream), sources
+        return self._llm_chat([{'role':'user','content':self._search_prompt(context,query)}],stream=True), sources
 
     def quiz_stuff(self,topic:str,previous_questions:list=None,comments:str=None):
         results = self.collection.query(query_texts=[topic],n_results=3)
@@ -126,12 +199,12 @@ class StudyAssistant:
         prev_q_text = f"Do not repeat any of these previous questions: {previous_questions}." if previous_questions else ""
         comments_text = f"Additional guidance: {comments}" if comments else ""
         prompt = f"You are an AI assistant that will never hallucinate answers. Use the context to answer the question being asked.\nContext: {relevant_context}\nCreate a multiple choice question using A-D and at the very end write 'ANSWER: X' where X is the right letter in the multiple choice that you create. The question should be about {topic}. {prev_q_text} {comments_text} If you cannot create a new question, say so explicitly and do not write 'ANSWER: X'."
-        response = ollama.chat(model=self.asking_model,messages=[{'role':'user','content':prompt}])
-        match = re.search(r"ANSWER:\s([A-D])",response['message']['content'],re.IGNORECASE)
+        response = self._llm_chat([{'role':'user','content':prompt}])
+        match = re.search(r"ANSWER:\s([A-D])",response,re.IGNORECASE)
         if not match:
             return "The model did not produce a valid question. Try again."
         correct_answer = match.group(1).upper()
-        question_text = re.sub(r"ANSWER:\s([A-D])", "", response['message']['content'], flags=re.IGNORECASE).strip()
+        question_text = re.sub(r"ANSWER:\s([A-D])", "", response, flags=re.IGNORECASE).strip()
         return {
             'question': question_text,
             'answer': correct_answer
@@ -166,9 +239,9 @@ class StudyAssistant:
             f"Format each one exactly as: 'Q: <question> | A: <answer>' on its own line. Do not use outside knowledge.\n\n"
             f"Context: {context}\nTopic: {topic}"
         )
-        response = ollama.chat(model=self.asking_model,messages=[{'role':'user','content':prompt}])
+        response = self._llm_chat([{'role':'user','content':prompt}])
         cards = []
-        for line in response['message']['content'].split('\n'):
+        for line in response.split('\n'):
             if '|' in line and line.strip().startswith('Q:'):
                 parts = line.split('|',1)
                 if len(parts) == 2:
@@ -234,8 +307,7 @@ class StudyAssistant:
             f"Return ONLY a valid JSON array. Each item must have: {{\"day\": N, \"focus\": \"short focus area\", \"tasks\": [\"task1\", \"task2\"]}}. "
             f"No text outside the JSON array.\n\nContext: {context if context else 'No notes available — use general knowledge.'}"
         )
-        response = ollama.chat(model=self.asking_model,messages=[{'role':'user','content':prompt}])
-        raw = response['message']['content']
+        raw = self._llm_chat([{'role':'user','content':prompt}])
         try:
             plan = json.loads(raw)
         except Exception:
@@ -271,8 +343,7 @@ class StudyAssistant:
             f"Maximum 12 triples. Keep concept names short (1-4 words). "
             f"No text outside the JSON array.\n\nContext: {context}"
         )
-        response = ollama.chat(model=self.asking_model,messages=[{'role':'user','content':prompt}])
-        raw = response['message']['content']
+        raw = self._llm_chat([{'role':'user','content':prompt}])
         try:
             return json.loads(raw)
         except Exception:
@@ -324,6 +395,37 @@ class StudyAssistant:
             return "chat_stream", gen, sources
         response, sources = self.search_data(query)
         return "chat", response, sources
+
+    def _config_path(self):
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)),"config.toml")
+
+    def _default_config(self):
+        return {
+            "api_keys": {"groq":"","openai":"","gemini":"","anthropic":""},
+            "models": {"provider":"ollama","chat_model":"llama3.1","embedding_model":"nomic-embed-text"},
+            "paths": {"chroma_path":"./chroma","saved_data_path":"./saved_data"},
+        }
+
+    def _write_toml(self,config:dict) -> str:
+        lines = []
+        for section,values in config.items():
+            lines.append(f"[{section}]")
+            for key,value in values.items():
+                lines.append(f'{key} = "{value}"')
+            lines.append("")
+        return "\n".join(lines)
+
+    def load_config(self) -> dict:
+        path = self._config_path()
+        if not os.path.exists(path):
+            return self._default_config()
+        with open(path,"rb") as f:
+            return tomllib.load(f)
+
+    def save_config(self,config:dict):
+        with open(self._config_path(),"w",encoding="utf-8") as f:
+            f.write(self._write_toml(config))
+        self._init_provider()
 
     def load_stats(self):
         if not os.path.exists("saved_data/stats.json"):

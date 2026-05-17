@@ -32,6 +32,11 @@ st.title("Chat with your notes")
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+chat_ready, chat_msg = st.session_state.studyai.check_chat_ready()
+if not chat_ready:
+    st.error(f"Chat unavailable: {chat_msg}")
+    st.stop()
+
 if st.session_state.collection.count() == 0:
     st.warning("Your knowledge base is empty. Go to **Add Content** to upload your notes first.")
     st.stop()

@@ -1,7 +1,10 @@
 _*
+.env*
 .venv
+config.toml
 __pycache__/
 chroma/
 errors.log
 submission for the project/
 submission for the project.zip
+.streamlit/secrets.toml

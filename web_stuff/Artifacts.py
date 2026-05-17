@@ -43,8 +43,11 @@ with tab_study_plans:
     else:
         st.write(f"{len(plans)} study plan(s) saved.")
         for i, p in enumerate(plans):
-            with st.expander(f"Study Plan {i + 1}"):
-                st.markdown(p.get("plan", ""))
+            with st.expander(f"{p.get('topic','Plan')} — {p.get('days','')} days (created {p.get('created','')})"):
+                for day_info in p.get('plan',[]):
+                    st.markdown(f"**Day {day_info['day']}: {day_info.get('focus','')}**")
+                    for task in day_info.get('tasks',[]):
+                        st.write(f"• {task}")
 
 with tab_concept_maps:
     maps = st.session_state.studyai.load_concept_maps()
