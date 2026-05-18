@@ -32,27 +32,8 @@ st.title("Chat with your notes")
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- diagnostics (remove once working) ---
 ai = st.session_state.studyai
-st.caption(f"Provider: `{ai._provider}` | Model: `{ai.asking_model}` | Base: `{ai._api_base}` | Docs: `{ai.collection.count()}`")
-if st.button("Test API connection", key="test_api"):
-    import traceback, requests as _req
-    url = f"{ai._api_base}/chat/completions"
-    st.write(f"URL: `{url}`")
-    headers = {"Authorization": f"Bearer {ai._api_key[:8]}...", "Content-Type": "application/json"}
-    payload = {"model": ai.asking_model, "messages": [{"role":"user","content":"Say hi."}], "max_tokens": 64}
-    st.json({"model": payload["model"], "url": url})
-    try:
-        r = _req.post(url,
-                      json=payload,
-                      headers={"Authorization": f"Bearer {ai._api_key}", "Content-Type": "application/json"},
-                      timeout=30)
-        st.write(f"Status: `{r.status_code}`")
-        st.code(r.text[:2000])
-    except Exception as e:
-        st.error(f"**{type(e).__name__}:** {e}")
-        st.code(traceback.format_exc())
-# --- end diagnostics ---
+st.caption(f"Using **{ai._provider}** — {ai.asking_model}")
 
 chat_ready, chat_msg = st.session_state.studyai.check_chat_ready()
 if not chat_ready:

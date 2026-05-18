@@ -112,7 +112,44 @@ class StudyAssistant:
         except Exception:
             return False
 
+    def _resolve_model(self, name, key, base):
+        """Fetch the provider's model list and return usable chat model ids."""
+        import requests as req
+        try:
+            if name == "anthropic":
+                return []
+            headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+            r = req.get(f"{base}/models", headers=headers, timeout=8)
+            if not r.ok:
+                return []
+            data = r.json()
+            model_ids = [m.get("id","") for m in data.get("data", [])]
+            skip = ("embed", "moderat", "whisper", "tts", "dall", "vision", "guard", "tool-use", "batch")
+            candidates = [m for m in model_ids if not any(s in m.lower() for s in skip)]
+            return candidates
+        except Exception:
+            return []
+
+    def _test_provider(self, name, key, base, model):
+        """Send a minimal chat request. Returns True if the API responds correctly."""
+        import requests as req
+        try:
+            if name == "anthropic":
+                headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
+                r = req.post("https://api.anthropic.com/v1/messages",
+                             json={"model": model, "max_tokens": 16, "messages": [{"role":"user","content":"hi"}]},
+                             headers=headers, timeout=10)
+            else:
+                headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+                r = req.post(f"{base}/chat/completions",
+                             json={"model": model, "max_tokens": 16, "messages": [{"role":"user","content":"hi"}]},
+                             headers=headers, timeout=10)
+            return r.ok
+        except Exception:
+            return False
+
     def _init_provider(self):
+        import requests as req
         config = self.load_config()
         keys = config.get("api_keys",{})
         models = config.get("models",{})
@@ -131,19 +168,30 @@ class StudyAssistant:
         self._api_base = ""
         self.asking_model = base_model
 
-        online = self._has_internet()
-        if not online:
+        if not self._has_internet():
             return
 
-        # Try configured provider first, then fall through the rest in order
         ordered = sorted(CLOUD_PROVIDERS, key=lambda p: 0 if p[0] == configured_provider else 1)
         for name, key, base, model_map in ordered:
-            if key:
-                self._provider = name
-                self._api_key = key
-                self._api_base = base
-                self.asking_model = model_map.get(base_model, base_model)
-                return
+            if not key:
+                continue
+            map_model = model_map.get(base_model, base_model)
+            live_models = self._resolve_model(name, key, base)
+            # try hardcoded known-good model first, then live candidates
+            seen = set()
+            candidates = []
+            for m in [map_model] + live_models:
+                if m and m not in seen:
+                    candidates.append(m)
+                    seen.add(m)
+            for model in candidates:
+                if self._test_provider(name, key, base, model):
+                    self._provider = name
+                    self._api_key = key
+                    self._api_base = base
+                    self.asking_model = model
+                    return
+        # all cloud providers failed — stay on ollama
 
     def _llm_chat(self,messages:list,stream:bool=False):
         import requests as req
