@@ -138,7 +138,7 @@ class CLI:
             elif choice == "Settings":
                 config = self.studyai.load_config()
                 setting = questionary.select("What do you want to edit?", choices=[
-                    "API Keys","Model Settings","Back"
+                    "API Keys","Model Settings","Check for Updates","Back"
                 ]).ask()
                 if setting == "API Keys":
                     for key in config["api_keys"]:
@@ -158,5 +158,17 @@ class CLI:
                     self.studyai.save_config(config)
                     self.studyai.asking_model = config["models"]["chat_model"]
                     console.print("[bold green]Model settings saved.[/]")
+                elif setting == "Check for Updates":
+                    console.print("Checking for updates...")
+                    info = self.studyai._check_for_updates()
+                    if info["error"]:
+                        console.print(f"[bold red]Could not check:[/] {info['error']}")
+                    elif info["up_to_date"]:
+                        console.print(f"[bold green]You're up to date ({info['current']}).[/]")
+                    else:
+                        console.print(f"[bold yellow]Update available:[/] {info['latest']} (you have {info['current']})")
+                        if questionary.confirm("Update now?").ask():
+                            msg = self.studyai.update_program()
+                            console.print(f"[bold green]{msg}[/]")
             elif choice == "Exit":
                 break

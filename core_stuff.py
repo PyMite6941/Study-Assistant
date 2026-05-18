@@ -11,13 +11,14 @@ import re
 import json
 from dateutil import parser as dateparser
 # Modules for processing data
-from PIL import Image
+from PIL import Image, __version__
 import pypdf
 import pytesseract
 # Modules for making everything work
 import chromadb
 from chromadb.config import Settings
 import ollama
+import requests
 import socket
 import uuid
 
@@ -86,6 +87,7 @@ GEMINI_MODEL_MAP = {
 }
 
 class StudyAssistant:
+    __version__ = 'v1.0'
     def __init__(self,chroma_path:str="./chroma"):
         self.processing_model = 'nomic-embed-text'
         self.chroma_client = chromadb.PersistentClient(settings=Settings(persist_directory=chroma_path,anonymized_telemetry=False,allow_reset=True))
@@ -106,11 +108,15 @@ class StudyAssistant:
             return False, "Ollama is not running and no API key is set. Start Ollama or add an API key in Settings."
 
     def _has_internet(self):
-        try:
-            socket.create_connection(("8.8.8.8", 53), timeout=3)
-            return True
-        except Exception:
-            return False
+        """Check if any cloud API endpoint is reachable via TCP."""
+        for host in ("api.groq.com", "api.openai.com", "api.anthropic.com"):
+            try:
+                s = socket.create_connection((host, 443), timeout=2)
+                s.close()
+                return True
+            except Exception:
+                continue
+        return False
 
     def _resolve_model(self, name, key, base):
         """Fetch the provider's model list and return usable chat model ids."""
@@ -607,3 +613,33 @@ class StudyAssistant:
     def install_stuff(self):
         subprocess.run(['bash','setup.sh'])
         return True
+
+    def _check_for_updates(self):
+        """Returns dict: {up_to_date, current, latest, error}."""
+        current = self.__version__
+        try:
+            r = requests.get(
+                "https://raw.githubusercontent.com/pymite6941/study-assistant/main/core_stuff.py",
+                timeout=8
+            )
+            if not r.ok:
+                return {"up_to_date": None, "current": current, "latest": None, "error": f"HTTP {r.status_code}"}
+            m = re.search(r"__version__\s*=\s*['\"]([^'\"]+)['\"]", r.text)
+            if not m:
+                return {"up_to_date": None, "current": current, "latest": None, "error": "Version not found in remote file"}
+            latest = m.group(1)
+            return {"up_to_date": current == latest, "current": current, "latest": latest, "error": None}
+        except Exception as e:
+            return {"up_to_date": None, "current": current, "latest": None, "error": str(e)}
+
+    def update_program(self):
+        info = self._check_for_updates()
+        if info["error"]:
+            return f"Could not check for updates: {info['error']}"
+        if info["up_to_date"]:
+            return f"Already on the latest version ({info['current']})."
+        try:
+            subprocess.run(['git', 'pull'], check=True)
+            return f"Updated from {info['current']} to {info['latest']}. Restart to apply."
+        except Exception as e:
+            return f"Update failed: {e}"

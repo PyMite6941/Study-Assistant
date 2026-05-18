@@ -37,6 +37,7 @@ This project has many useful features that make this project truly stand out, ho
 - The Add Content Feature is vital for success since without it the ChromaDB would never be updated. This important feature adds the ability to upload not just files but take a photo to be uploaded through the Steamlit package.
 - The Setup Shell Script [say that 10 times fast] quickly initalizes everything necessary for the project to run without the hastle of understanding every little bit, abstracting the semi-complex and super boring commands that need to be added. This makes it easy so that the user doesn't have to focus on the difficult aspects of installation themself.
 - The essential Config.toml file stores any API keys that are for the cloud-based AI engines securely and makes changing API keys very easy with the interfaces using the functions in `core_stuff.py`.
+- The Update Feature allows the program to check for any updates in the GitHub repo instead of manually reinstalling the repo. This feature is accessible in every UI.
 
 ## Inspiration
 

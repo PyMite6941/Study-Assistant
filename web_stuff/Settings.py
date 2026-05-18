@@ -105,3 +105,22 @@ with col_b:
     if st.button("Reset Session State"):
         st.session_state.clear()
         st.rerun()
+
+st.divider()
+
+# --- Updates ---
+st.subheader("Updates")
+st.caption(f"Current version: **{st.session_state.studyai.__version__}**")
+if st.button("Check for Updates"):
+    with st.spinner("Checking..."):
+        info = st.session_state.studyai._check_for_updates()
+    if info["error"]:
+        st.error(f"Could not check: {info['error']}")
+    elif info["up_to_date"]:
+        st.success(f"You're up to date ({info['current']}).")
+    else:
+        st.warning(f"Update available: {info['latest']} (you have {info['current']})")
+        if st.button("Update Now"):
+            with st.spinner("Pulling latest version..."):
+                msg = st.session_state.studyai.update_program()
+            st.info(msg)
