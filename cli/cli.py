@@ -83,6 +83,8 @@ class CLI:
                 previous_questions = []
                 topic = questionary.text("What topic should be quizzed?\n> ").ask()
                 adaptive_comment = None
+                answer_streak = 0
+                incorrect_streak = 0
                 while True:
                     results = self.studyai.quiz_stuff(topic,previous_questions=previous_questions,comments=adaptive_comment)
                     if isinstance(results,str):
@@ -93,13 +95,21 @@ class CLI:
                         break
                     previous_questions.append(results['question'])
                     if results['answer'] == answer:
-                        console.print("[bold green]Correct![/]")
+                        answer_streak += 1
+                        incorrect_streak = 0
+                        xp = self.studyai.calculate_xp(15, answer_streak, 0)
+                        console.print(f"[bold green]Correct! +{xp} XP[/] [dim](streak: {answer_streak})[/]")
                         self.studyai.save_stats(topic,correct=True)
                         adaptive_comment = f"The user got the last question right. Make the next question slightly harder but still on {topic}."
                     else:
-                        console.print(f"[bold red]Incorrect![/] The correct answer was {results['answer']}.")
+                        incorrect_streak += 1
+                        answer_streak = 0
+                        xp = self.studyai.calculate_xp(2, 0, 0)
+                        console.print(f"[bold red]Incorrect![/] The correct answer was {results['answer']}. [dim]+{xp} XP[/]")
                         self.studyai.save_stats(topic,correct=False)
                         adaptive_comment = f"The user got the last question wrong (chose {answer}, correct was {results['answer']}). Make a similar question on the same concept to reinforce it."
+                    lvl = self.studyai.get_level_info()
+                    console.print(f"[dim]XP: {lvl['xp']} | Lv.{lvl['level']} {lvl['title']} | {lvl['xp_to_next']} to next level[/]")
             elif choice == "Create a study plan":
                 topic = questionary.text("What topic do you want to study?\n> ").ask()
                 date_str = questionary.text("Target date (e.g. June 10, in 5 days) — leave blank for 7 days\n> ").ask().strip()

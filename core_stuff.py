@@ -11,7 +11,7 @@ import re
 import json
 from dateutil import parser as dateparser
 # Modules for processing data
-from PIL import Image, __version__
+from PIL import Image
 import pypdf
 import pytesseract
 # Modules for making everything work
@@ -86,10 +86,20 @@ GEMINI_MODEL_MAP = {
     "phi3:mini": "gemini-2.0-flash",
 }
 
+XP_LEVELS = [
+    (0,    1, "Novice"),
+    (100,  2, "Apprentice"),
+    (250,  3, "Scholar"),
+    (500,  4, "Expert"),
+    (1000, 5, "Master"),
+    (2000, 6, "Legend"),
+]
+
 class StudyAssistant:
-    __version__ = 'v1.0'
+    __version__ = 'v1.1'
     def __init__(self,chroma_path:str="./chroma"):
         self.processing_model = 'nomic-embed-text'
+        self.xp = 0
         self.chroma_client = chromadb.PersistentClient(settings=Settings(persist_directory=chroma_path,anonymized_telemetry=False,allow_reset=True))
         self._init_provider()
         from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
@@ -120,12 +130,11 @@ class StudyAssistant:
 
     def _resolve_model(self, name, key, base):
         """Fetch the provider's model list and return usable chat model ids."""
-        import requests as req
         try:
             if name == "anthropic":
                 return []
             headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-            r = req.get(f"{base}/models", headers=headers, timeout=8)
+            r = requests.get(f"{base}/models", headers=headers, timeout=8)
             if not r.ok:
                 return []
             data = r.json()
@@ -138,16 +147,15 @@ class StudyAssistant:
 
     def _test_provider(self, name, key, base, model):
         """Send a minimal chat request. Returns True if the API responds correctly."""
-        import requests as req
         try:
             if name == "anthropic":
                 headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
-                r = req.post("https://api.anthropic.com/v1/messages",
+                r = requests.post("https://api.anthropic.com/v1/messages",
                              json={"model": model, "max_tokens": 16, "messages": [{"role":"user","content":"hi"}]},
                              headers=headers, timeout=10)
             else:
                 headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-                r = req.post(f"{base}/chat/completions",
+                r = requests.post(f"{base}/chat/completions",
                              json={"model": model, "max_tokens": 16, "messages": [{"role":"user","content":"hi"}]},
                              headers=headers, timeout=10)
             return r.ok
@@ -155,7 +163,6 @@ class StudyAssistant:
             return False
 
     def _init_provider(self):
-        import requests as req
         config = self.load_config()
         keys = config.get("api_keys",{})
         models = config.get("models",{})
@@ -183,7 +190,6 @@ class StudyAssistant:
                 continue
             map_model = model_map.get(base_model, base_model)
             live_models = self._resolve_model(name, key, base)
-            # try hardcoded known-good model first, then live candidates
             seen = set()
             candidates = []
             for m in [map_model] + live_models:
@@ -197,11 +203,8 @@ class StudyAssistant:
                     self._api_base = base
                     self.asking_model = model
                     return
-        # all cloud providers failed — stay on ollama
 
     def _llm_chat(self,messages:list,stream:bool=False):
-        import requests as req
-
         if self._provider == "ollama":
             if stream:
                 s = ollama.chat(model=self.asking_model,messages=messages,stream=True)
@@ -219,7 +222,7 @@ class StudyAssistant:
             if stream:
                 payload["stream"] = True
                 def _anthropic_gen():
-                    r = req.post("https://api.anthropic.com/v1/messages",
+                    r = requests.post("https://api.anthropic.com/v1/messages",
                                  json=payload,headers=headers,stream=True,timeout=60)
                     r.raise_for_status()
                     for raw in r.iter_lines():
@@ -232,7 +235,7 @@ class StudyAssistant:
                             except Exception:
                                 pass
                 return _anthropic_gen()
-            r = req.post("https://api.anthropic.com/v1/messages",
+            r = requests.post("https://api.anthropic.com/v1/messages",
                          json=payload,headers=headers,timeout=60)
             r.raise_for_status()
             body = r.json()
@@ -240,13 +243,12 @@ class StudyAssistant:
                 raise RuntimeError(f"Anthropic error: {body['error'].get('message', body['error'])}")
             return body["content"][0]["text"]
 
-        # OpenAI-compatible providers (groq, openai, gemini)
         headers = {"Authorization":f"Bearer {self._api_key}","Content-Type":"application/json"}
         payload = {"model":self.asking_model,"messages":messages,"max_tokens":2048}
         if stream:
             payload["stream"] = True
             def _gen():
-                r = req.post(f"{self._api_base}/chat/completions",
+                r = requests.post(f"{self._api_base}/chat/completions",
                              json=payload,headers=headers,stream=True,timeout=60)
                 r.raise_for_status()
                 for raw in r.iter_lines():
@@ -260,7 +262,7 @@ class StudyAssistant:
                         except Exception:
                             pass
             return _gen()
-        r = req.post(f"{self._api_base}/chat/completions",
+        r = requests.post(f"{self._api_base}/chat/completions",
                      json=payload,headers=headers,timeout=60)
         if not r.ok:
             try:
@@ -609,6 +611,58 @@ class StudyAssistant:
         os.makedirs("saved_data",exist_ok=True)
         with open("saved_data/stats.json","w") as f:
             json.dump(stats,f)
+
+    def get_xp_data(self) -> dict:
+        return {'xp':self.xp}
+
+    def calculate_xp(self,xp:int,answer_streak:int,incorrect_streak) -> int:
+        if answer_streak > 0:
+            xp *= answer_streak
+        else:
+            xp = xp - 6 * incorrect_streak
+        self.xp += xp
+        return xp
+
+    def get_level_info(self) -> dict:
+        xp = self.xp
+        level, title = XP_LEVELS[0][1], XP_LEVELS[0][2]
+        for threshold, lvl, name in XP_LEVELS:
+            if xp >= threshold:
+                level, title = lvl, name
+        if level < len(XP_LEVELS):
+            next_thresh = XP_LEVELS[level][0]
+            prev_thresh = XP_LEVELS[level - 1][0]
+            span = max(1, next_thresh - prev_thresh)
+            progress = min(1.0, (xp - prev_thresh) / span)
+            xp_to_next = max(0, next_thresh - xp)
+        else:
+            progress, xp_to_next = 1.0, 0
+        return {"xp": xp, "level": level, "title": title, "progress": progress, "xp_to_next": xp_to_next}
+
+    def calculate_levels(self) -> float:
+        self.levels = self.xp / 100
+        return self.levels
+
+    def load_levels(self) -> float:
+        try:
+            with open("saved_data/levels.txt") as file:
+                data = file.readlines()
+                self.levels = data
+                return data
+        except FileNotFoundError:
+            return 0
+
+    def save_levels(self):
+        try:
+            with open("saved_data/levels.txt") as file:
+                data = file.readlines()
+            new_levels = data + self.calculate_levels()
+            with open("saved_data/levels.txt") as file:
+                self.levels = new_levels
+                file.write(new_levels)
+        except FileNotFoundError:
+            with open("saved_data/levels.txt") as file:
+                file.write(0)
 
     def install_stuff(self):
         subprocess.run(['bash','setup.sh'])

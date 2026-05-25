@@ -6,3 +6,4 @@ __pycache__/
 chroma/
 errors.log
 .streamlit/secrets.toml
+study_assistant.zip

@@ -113,7 +113,10 @@ st.subheader("Updates")
 st.caption(f"Current version: **{st.session_state.studyai.__version__}**")
 if st.button("Check for Updates"):
     with st.spinner("Checking..."):
-        info = st.session_state.studyai._check_for_updates()
+        st.session_state.update_info = st.session_state.studyai._check_for_updates()
+
+if "update_info" in st.session_state:
+    info = st.session_state.update_info
     if info["error"]:
         st.error(f"Could not check: {info['error']}")
     elif info["up_to_date"]:
@@ -124,3 +127,4 @@ if st.button("Check for Updates"):
             with st.spinner("Pulling latest version..."):
                 msg = st.session_state.studyai.update_program()
             st.info(msg)
+            del st.session_state.update_info

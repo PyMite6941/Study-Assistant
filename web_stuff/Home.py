@@ -22,7 +22,17 @@ artifacts_page = st.Page("Artifacts.py", title="Artifacts")
 study_plan_page = st.Page("Study Plan.py", title="Study Plan")
 concept_map_page = st.Page("Concept Map.py", title="Concept Map")
 settings_page = st.Page("Settings.py", title="Settings")
-st.sidebar.text("Hack America 2026")
+
 pg = st.navigation([description_page, upload_page, chat_page, artifacts_page, study_plan_page, concept_map_page, settings_page])
+
+info = st.session_state.studyai.get_level_info()
+st.sidebar.markdown(f"**Lv.{info['level']} — {info['title']}**")
+st.sidebar.metric("Total XP", info['xp'])
+if info['xp_to_next'] > 0:
+    st.sidebar.progress(info['progress'], text=f"{info['xp_to_next']} XP to Level {info['level'] + 1}")
+else:
+    st.sidebar.progress(1.0, text="Max Level!")
 st.sidebar.divider()
+st.sidebar.caption("Hack America 2026")
+
 pg.run()

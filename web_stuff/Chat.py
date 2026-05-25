@@ -81,7 +81,8 @@ if prompt:
                             st.error(f"Incorrect — the answer was {data['answer']}")
                     if st.button("Save to study later"):
                         st.session_state.studyai.save_quizzes(data)
-                        st.success("Saved the question to review later")
+                        xp = st.session_state.studyai.calculate_xp(10, 1, 0)
+                        st.success(f"Saved! +{xp} XP")
                     saved_text = str(data)
             elif msg_type == 'flashcards':
                 if isinstance(data, str):
@@ -92,7 +93,8 @@ if prompt:
                     st.table(data)
                     if st.button("Save to study later"):
                         st.session_state.studyai.save_flashcards(data)
-                        st.success("Saved flashcards to review later")
+                        xp = st.session_state.studyai.calculate_xp(25, 1, 0)
+                        st.success(f"Saved flashcards! +{xp} XP")
                     saved_text = str(data)
             elif msg_type == 'study_plan':
                 if data:
