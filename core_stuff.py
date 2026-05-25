@@ -1,4 +1,6 @@
 # Modules to run the necessary programs
+from importlib.resources import path
+from importlib.resources import path
 import os
 import platform
 import subprocess
@@ -611,6 +613,28 @@ class StudyAssistant:
         os.makedirs("saved_data",exist_ok=True)
         with open("saved_data/stats.json","w") as f:
             json.dump(stats,f)
+
+    def get_steak(self) -> dict:
+        if not os.path.exists("saved_data/streak.json"):
+            return {"streak": 0, "last_date": ""}
+        with open("saved_data/streak.json") as f:
+            return json.load(f)
+
+    def update_streak(self) -> dict:
+        data = self.get_streak()
+        today = str(datetime.date.today())
+        yesterday = str(datetime.date.today() - datetime.timedelta(days=1))
+        if data["last_date"] == today:
+            return data
+        elif data["last_date"] == yesterday:
+            data["streak"] += 1
+        else:
+            data["streak"] = 1
+        data["last_date"] = today
+        os.makedirs("saved_data", exist_ok=True)
+        with open("saved_data/streak.json", "w") as f:
+            json.dump(data, f)
+        return data
 
     def get_xp_data(self) -> dict:
         return {'xp':self.xp}

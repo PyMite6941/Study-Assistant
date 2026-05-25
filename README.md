@@ -1,4 +1,4 @@
-Hello! This is a project I made for myself and it also just so happened that I submitted it for the 2026 Hack America Hackathon.
+Hello! This is a project I made for myself and it also just so happened that I submitted it for the 2026 Hack America Hackathon and improved it a lot for the HackMars 3.0 hackathon.
 
 I put a lot of time into this project from making the installation of necessary packages super easy to even considering the small functionality details such as runtime on terrible laptops like mine. I even expanded to supporting cloud models such as Groq, ChatGPT, and Anthropic to name a few. Any support is much appreciated.
 

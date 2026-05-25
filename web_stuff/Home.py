@@ -33,6 +33,6 @@ if info['xp_to_next'] > 0:
 else:
     st.sidebar.progress(1.0, text="Max Level!")
 st.sidebar.divider()
-st.sidebar.caption("Hack America 2026")
+st.sidebar.caption("HackMars 3.0")
 
 pg.run()
