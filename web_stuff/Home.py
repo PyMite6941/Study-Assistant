@@ -26,8 +26,12 @@ settings_page = st.Page("Settings.py", title="Settings")
 pg = st.navigation([description_page, upload_page, chat_page, artifacts_page, study_plan_page, concept_map_page, settings_page])
 
 info = st.session_state.studyai.get_level_info()
+streak = st.session_state.studyai.get_streak()
+
 st.sidebar.markdown(f"**Lv.{info['level']} — {info['title']}**")
-st.sidebar.metric("Total XP", info['xp'])
+col_xp, col_streak = st.sidebar.columns(2)
+col_xp.metric("Total XP", info['xp'])
+col_streak.metric("🔥 Streak", f"{streak['streak']}d")
 if info['xp_to_next'] > 0:
     st.sidebar.progress(info['progress'], text=f"{info['xp_to_next']} XP to Level {info['level'] + 1}")
 else:

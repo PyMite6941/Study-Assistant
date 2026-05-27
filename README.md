@@ -6,7 +6,7 @@ Please read the license before downloading as it may change any intentions of do
 
 ## Setup
 
-If you want to use Ollama as the local model to incorporate AI security practices use the setup.sh which works on every major OS [Linux, MacOS, or Windows].
+If you want to use Ollama as the local model to incorporate AI security practices allow the setup.sh to use Ollama to pull the Llama3.1, this script which works on every major OS [Linux, MacOS, or Windows].
 First give the program the permissions to be ran using this command:
 `chmod +x setup.sh`
 Run the shell script like this on Powershell after the above command is done:
@@ -14,7 +14,7 @@ Run the shell script like this on Powershell after the above command is done:
 Run the shell script like this on MacOS or Linux after the command is done:
 `./setup.sh`
 
-However you can just get an API key from a provider like Groq or Anthropic if your device doesn't have a GPU and/or a good CPU, just run the CLI or the Web UI settings and select the proper API key to save.
+However you can just get an API key from a provider like Groq or Anthropic if your device doesn't have a GPU and/or a good CPU, just run the CLI or the Web UI settings and select the proper API key to save if you want to avoid installing the Llama3.1. However if Llama3.1 is installed the program can work offline, unlike if you implement APIs. Thus I recommend having both.
 
 ## Running the Program
 

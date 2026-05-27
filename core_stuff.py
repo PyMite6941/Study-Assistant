@@ -1,6 +1,4 @@
 # Modules to run the necessary programs
-from importlib.resources import path
-from importlib.resources import path
 import os
 import platform
 import subprocess
@@ -614,7 +612,7 @@ class StudyAssistant:
         with open("saved_data/stats.json","w") as f:
             json.dump(stats,f)
 
-    def get_steak(self) -> dict:
+    def get_streak(self) -> dict:
         if not os.path.exists("saved_data/streak.json"):
             return {"streak": 0, "last_date": ""}
         with open("saved_data/streak.json") as f:
